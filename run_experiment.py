@@ -1,5 +1,6 @@
 import os
 import threading
+import time
 
 def run_ximea_aquisition(save_folder, frame_rate):
     '''
@@ -10,7 +11,32 @@ def run_ximea_aquisition(save_folder, frame_rate):
     Returns:
         None
     '''
+    time.sleep(10)
+    print('Finished Ximea Aquisition.')
 
+def run_pupillabs_aquisition(save_folder, frame_rate):
+    '''
+    Aquire eyetracking from pupil labs tracker and save it.
+    Parameters:
+        save_folder (str): name of folder to save images
+        frame_rate (int): how fast should we collect?
+    Returns:
+        None
+    '''
+    time.sleep(5)
+    print('Finished PupilLabs Aquisition.')
+
+def run_realsense_aquisition(save_folder, frame_rate):
+    '''
+    Aquire IMU data from realsense trackers and save it.
+    Parameters:
+        save_folder (str): name of folder to save images
+        frame_rate (int): how fast should we collect?
+    Returns:
+        None
+    '''
+    time.sleep(5)
+    print('Finished Realsense Aquisition.')
 
 
 def run_experiment(subject=None, exp_type=None, save_dir='./capture'):
