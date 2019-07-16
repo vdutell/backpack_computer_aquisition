@@ -1,4 +1,19 @@
-def run_experiment(subject=None, exp_type=None):
+import os
+import threading
+
+def run_ximea_aquisition(save_folder, frame_rate):
+    '''
+    Aquire images from ximea cameras and save them.
+    Parameters:
+        save_folder (str): name of folder to save images
+        frame_rate (int): how fast should we collect?
+    Returns:
+        None
+    '''
+
+
+
+def run_experiment(subject=None, exp_type=None, save_dir='./capture'):
     
     '''
     Run a data collection, either pre or post calibration, or an experiment.
@@ -26,10 +41,30 @@ def run_experiment(subject=None, exp_type=None):
     print(f'Collecting at {frame_rate} fps.')
     
     #create directory structure for saving
-    
+    save_folder = os.path.join(save_dir, subject, exp_type)
+    scene_cam_folder = os.path.join(save_folder,'scene_camera')
+    eye_cam_folder = os.path.join(save_folder,'eye_camera')
+    imu_folder = os.path.join(save_folder, 'imu')
+
     #start collection for scene cameras (ximea)
-    #start collection for eye tracker (pupil labs)
-    #start collection for IMUS (intel realsense)
+    scenecam_thread = threading.Thread(target=run_ximea_aquisition, 
+                                        args=(scene_cam_folder, frame_rate))
+    scenecam_thread.daemon = True  # Daemonize thread
+    scenecam_thread.start()        # Start the execution
+    print(f'Started scene aquisition at {frame_rate}fps...')
     
-    print('Experiment Completed Sucessfully!')
+    #start collection for eye tracker (pupil labs)
+    eyetracker_thread = threading.Thread(target=run_pupillabs_aquisition, 
+                                        args=(eye_cam_folder, frame_rate))
+    eyetracker_thread.daemon = True  # Daemonize thread
+    eyetracker_thread.start()        # Start the execution   
+    print(f'Started eyetracking aquisition at {frame_rate}fps...')
+
+    #start collection for IMUS (intel realsense)
+    imu_thread = threading.Thread(target=run_realsense_aquisition, 
+                                        args=(imu_folder, frame_rate))
+    imu_thread.daemon = True  # Daemonize thread
+    imu_thread.start()        # Start the execution   
+    print(f'Started imu aquisition at {frame_rate}fps...')    
+    
     return()
