@@ -50,6 +50,7 @@ def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
 
 
     return(cam)
+    
 
 def aquire_save_fullset(num_frames=10, cam_timing_mode='XI_ACQ_TIMING_MODE_FREE_RUN', 
                         cam_exposure=500, 
