@@ -64,12 +64,13 @@ def aquire_save_fullset(num_frames=10, cam_timing_mode='XI_ACQ_TIMING_MODE_FREE_
     cam = xiapi.Camera()
 
     #start communication
-    #to open specific device, use:
-    #cam.open_device_by_SN('41305651')
-    #(open by serial number)
+
     if(verbose):
         print('Opening first camera...')
     cam.open_device()
+    #to open specific device, use:
+    #cam.open_device_by_SN('1922001')
+    #(open by serial number)
 
     try:
 
