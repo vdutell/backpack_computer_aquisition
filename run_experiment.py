@@ -99,10 +99,27 @@ def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):
         print('Cleanly Stopping Device Aquisition and closing file.')
         cam_od.close_device()
         cam_os.close_device()
+        
+    except KeyboardInterrupt:
+        print('Detected Keyboard Interrupt. Stopping Acquisition Cleanly')
+        
+        #stop acquisition
+        cam_od.stop_acquisition()
+        cam_os.stop_acquisition()
+
+        #stop communication
+        cam_od.close_device()
+        cam_os.close_device()
     
     except Exception as e:
         print(e)
-        print('Cleanly Stopping Device Aquisition and closing file.')
+        print('There was an Error. Cleanly Stopping Device Aquisition and closing file.')
+        
+        #stop acquisition
+        cam_od.stop_acquisition()
+        cam_os.stop_acquisition()
+        
+        #stop communication
         cam_od.close_device()
         cam_os.close_device()
 
