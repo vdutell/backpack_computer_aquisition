@@ -4,18 +4,21 @@ import time
 from ximea import xiapi
 import ximea_cam_aquire_save as ximtools
 
-def save_frame_timestamp(frame_data, save_folder, timestamp):
+def save_frame_timestamp(frame_data, i, save_folder, timestamp):
     '''
     Save frame to file
     Params:
         frame_data (binary str): raw data from camera to be saved
+        i (int): frame number
         save_folder (str): name of folder to save in
         timestamp (int): timestamp of time we captured frame
     Returns:
         success_flag (bool): were we sucessfull in saving?
     '''    
-    with open(f'{save_folder}_{i}_{timestamp}.bin', 'wb') as f:
+    filename = os.path.join(save_folder, f'frame_{i}.bin')
+    with open(filename, 'wb') as f:
         f.write(frame_data)
+        f.close()
         
     ###TODO: Write to a queue taht will contain our timestamps instead of in filename
     
@@ -63,8 +66,10 @@ def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):
         
         for i in range(maxframes):
             time_pre = time.time()
+            cam_od.get_image(cam_od_im)
             cam_od_data = cam_od_im.get_image_data_raw()
             time_mid = time.time()
+            cam_os.get_image(cam_os_im)
             cam_os_data = cam_os_im.get_image_data_raw()
             time_post = time.time()
             
@@ -73,6 +78,7 @@ def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):
 
             od_save_thread = mp.Process(target=save_frame_timestamp, 
                                         args=(cam_od_data,
+                                              i,
                                               cam_od_folder,
                                               cam_od_time))
                                               
@@ -81,6 +87,7 @@ def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):
             
             os_save_thread = mp.Process(target=save_frame_timestamp, 
                                         args=(cam_os_data,
+                                              i,
                                               cam_os_folder,
                                               cam_os_time))
                                               
@@ -89,7 +96,9 @@ def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):
             os_save_thread.start()
             
         print(f'Sampled to max num frames of {maxframes}')
-        return()
+        print('Cleanly Stopping Device Aquisition and closing file.')
+        cam_od.close_device()
+        cam_os.close_device()
     
     except Exception as e:
         print(e)
@@ -97,7 +106,7 @@ def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):
         cam_od.close_device()
         cam_os.close_device()
 
-
+    
     print('Finished Ximea Aquisition.')
 
 def run_pupillabs_aquisition(save_folder, frame_rate):
@@ -125,7 +134,7 @@ def run_realsense_aquisition(save_folder, frame_rate):
     print('Finished Realsense Aquisition.')
 
 
-def run_experiment(subject=None, task_name=None, exp_type=None, save_dir='./capture'):
+def run_experiment(subject_name=None, task_name=None, exp_type=None, save_dir='./capture'):
     
     '''
     Run a data collection, either pre or post calibration, or an experiment.
@@ -138,7 +147,7 @@ def run_experiment(subject=None, task_name=None, exp_type=None, save_dir='./capt
     '''
     #test for valid input
     valid_experiments=['pre','post','exp']
-    if(subject==None):
+    if(subject_name==None):
        raise ValueError("Please Specify a Subject ID!")
     
     if(exp_type not in valid_experiments):
@@ -155,7 +164,7 @@ def run_experiment(subject=None, task_name=None, exp_type=None, save_dir='./capt
     print(f'Collecting at {frame_rate} fps.')
     
     #create directory structure for saving
-    save_folder = os.path.join(save_dir, subject, task_name, exp_type)
+    save_folder = os.path.join(save_dir, subject_name, task_name, exp_type)
     scene_cam_folder = os.path.join(save_folder,'scene_camera')
     eye_cam_folder = os.path.join(save_folder,'eye_camera')
     imu_folder = os.path.join(save_folder, 'imu')
@@ -181,9 +190,8 @@ def run_experiment(subject=None, task_name=None, exp_type=None, save_dir='./capt
     #                                    args=(scene_cam_folder, frame_rate))
     #scenecam_thread.daemon = True  # Daemonize thread
     #scenecam_thread.start()        # Start the execution
+    print(f'Starting scene aquisition at {frame_rate}fps...')
     run_ximea_aquisition(scene_cam_folder, frame_rate)
-    print(f'Started scene aquisition at {frame_rate}fps...')
-    
     
     
     return()
