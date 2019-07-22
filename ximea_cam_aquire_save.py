@@ -122,7 +122,7 @@ def aquire_save_fullset(num_frames=10, cam_timing_mode='XI_ACQ_TIMING_MODE_FREE_
         if(verbose):
             print(f'Saving data...', end='')
         for i in range(len(ims)):
-            with open(f'capture/data_raw_bytes_{i}.bin', 'wb') as f:
+            with open(f'capture/batch/data_raw_bytes_{i}.bin', 'wb') as f:
                 f.write(ims[i])
                 if(verbose):
                     print('*',end='')
