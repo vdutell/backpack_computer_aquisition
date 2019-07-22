@@ -3,6 +3,20 @@ import multiprocessing as mp
 import time
 from ximea import xiapi
 import ximea_cam_aquire_save as ximtools
+import queue
+
+def write_queue_to_file(save_folder, queue):
+    '''
+    Write queue to file to save timestamps, matching frame number to timestamp'''
+    queue_savefile = os.path.join(save_folder,'timestamps.txt')
+    with open(queue_savefile, 'w') as f:
+        f.write(f'frame\tos\tod\n')
+        while not queue.empty():
+            f.write(queue.get())
+            f.write('\n')
+        f.close()
+    return()
+        
 
 def save_frame_timestamp(frame_data, i, save_folder, timestamp):
     '''
@@ -35,6 +49,15 @@ def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):
         None
     ''' 
     
+    #timestamp queue and start
+    q = queue.Queue()
+    
+    #camera_settings
+    cam_timing_mode='XI_ACQ_TIMING_MODE_FREE_RUN'
+    cam_exposure=100
+    cam_framerate=200
+    cam_gain=10
+    
     #prep camera od
     cam_od_id = 'XECAS1922000'
     cam_od_folder = os.path.join(save_folder,'cam_od')
@@ -51,37 +74,50 @@ def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):
         #create camera, open it, and make image instance
         cam_od = xiapi.Camera()
         cam_od.open_device_by_SN(cam_od_id)
-        #TODO: apply more settings to camera *******
-        cam_od = ximtools.apply_cam_settings(cam_od, exposure=1000)
+        #apply camera settings
+        cam_od = ximtools.apply_cam_settings(cam_od,
+                                             timing_mode=cam_timing_mode,
+                                             exposure=cam_exposure,
+                                             framerate=cam_framerate,
+                                             gain=cam_gain)
         cam_od_im = xiapi.Image()
         cam_od.start_acquisition()
         
         #create camera, open it, and make image instance
         cam_os = xiapi.Camera()
         cam_os.open_device_by_SN(cam_os_id)
-        cam_os = ximtools.apply_cam_settings(cam_os, exposure=1000)
-        #TODO: apply more settings to camera *******
+        #apply camera settings
+        cam_os = ximtools.apply_cam_settings(cam_os,
+                                             timing_mode=cam_timing_mode,
+                                             exposure=cam_exposure,
+                                             framerate=cam_framerate,
+                                             gain=cam_gain)
         cam_os_im = xiapi.Image()
         cam_os.start_acquisition()
         
         for i in range(maxframes):
+            
+            #get images and timestamps
             time_pre = time.time()
             cam_od.get_image(cam_od_im)
-            cam_od_data = cam_od_im.get_image_data_raw()
             time_mid = time.time()
             cam_os.get_image(cam_os_im)
-            cam_os_data = cam_os_im.get_image_data_raw()
             time_post = time.time()
             
-            cam_od_time = time_pre + ((time_mid - time_pre)/2)
-            cam_os_time = time_mid + ((time_post - time_mid)/2)
+            #pull image from cameras
+            cam_od_data = cam_od_im.get_image_data_raw()
+            cam_os_data = cam_os_im.get_image_data_raw()
+            
+            #calcuate the exact timestamp we took the image
+            cam_od_time = time_pre + ((time_mid - time_pre)/2.0)
+            cam_os_time = time_mid + ((time_post - time_mid)/2.0)
+            q.put(f'{i}\t{cam_os_time}\t{cam_od_time}')
 
             od_save_thread = mp.Process(target=save_frame_timestamp, 
                                         args=(cam_od_data,
                                               i,
                                               cam_od_folder,
                                               cam_od_time))
-                                              
             od_save_thread.daemon = True
             od_save_thread.start()            
             
@@ -89,16 +125,23 @@ def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):
                                         args=(cam_os_data,
                                               i,
                                               cam_os_folder,
-                                              cam_os_time))
-                                              
-                                              
+                                              cam_os_time))  
             os_save_thread.daemon = True
             os_save_thread.start()
             
         print(f'Sampled to max num frames of {maxframes}')
         print('Cleanly Stopping Device Aquisition and closing file.')
+        
+        #stop acquisition
+        cam_od.stop_acquisition()
+        cam_os.stop_acquisition()
+        #stop communication
         cam_od.close_device()
         cam_os.close_device()
+        
+        #write queue timestamps
+        write_queue_to_file(save_folder, q)
+
         
     except KeyboardInterrupt:
         print('Detected Keyboard Interrupt. Stopping Acquisition Cleanly')
@@ -106,11 +149,14 @@ def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):
         #stop acquisition
         cam_od.stop_acquisition()
         cam_os.stop_acquisition()
-
         #stop communication
         cam_od.close_device()
         cam_os.close_device()
-    
+        
+        #write queue timestamps
+        write_queue_to_file(save_folder, q)
+
+ 
     except Exception as e:
         print(e)
         print('There was an Error. Cleanly Stopping Device Aquisition and closing file.')
@@ -122,6 +168,9 @@ def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):
         #stop communication
         cam_od.close_device()
         cam_os.close_device()
+        
+        #write queue timestamps
+        write_queue_to_file(save_folder, q)
 
     
     print('Finished Ximea Aquisition.')
