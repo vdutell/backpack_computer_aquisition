@@ -80,9 +80,9 @@ def calc_timestamp_stats(timestamp_file, write_folder):
     plt.legend()
     plt.ylabel('Seconds')
     plt.title('Timing Disparity for World Camera')
-    plt.show()
     plt.savefig(os.path.join(write_folder,'timestamp_stats.png'))
-    
+    plt.show()
+   
     
         
 def run_ximea_analysis(capture_folder, analysis_folder):
@@ -101,14 +101,14 @@ def run_ximea_analysis(capture_folder, analysis_folder):
         os_ana_folder = os.path.join(analysis_folder,'cam_os')
         if not os.path.exists(os_ana_folder):
             os.makedirs(os_ana_folder)
-        #convert_folder(os_cap_folder, os_ana_folder)
+        convert_folder(os_cap_folder, os_ana_folder)
 
         #same for OD
         od_cap_folder = os.path.join(capture_folder,'cam_od')
         od_ana_folder = os.path.join(analysis_folder,'cam_od')
         if not os.path.exists(od_ana_folder):
             os.makedirs(od_ana_folder)
-        #convert_folder(od_cap_folder, od_ana_folder)
+        convert_folder(od_cap_folder, od_ana_folder)
 
     except Exception as e:
         print(e)

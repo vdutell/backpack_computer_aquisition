@@ -80,22 +80,98 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
                                              exposure=cam_exposure,
                                              framerate=cam_framerate,
                                              gain=cam_gain)
-        cam_od_im = xiapi.Image()
-        cam_od.start_acquisition()
+    
         
         #create camera, open it, and make image instance
         cam_os = xiapi.Camera()
         cam_os.open_device_by_SN(cam_os_id)
         #apply camera settings
         cam_os = ximtools.apply_cam_settings(cam_os,
-                                             timing_mode=cam_timing_mode,
+                                             timing_mode=None,
                                              exposure=cam_exposure,
                                              framerate=cam_framerate,
                                              gain=cam_gain)
+
+        
+        #set camera 1 as master
+        cam_od.set_trigger_source('XI_TRG_SOFTWARE')
+        cam_od.set_trigger_selector('XI_TRG_SEL_EXPOSURE_ACTIVE')
+        cam_od.set_gpi_mode('XI_GPO_EXPOSURE_ACTIVE')
+        #set camera 2 as slave
+        cam_os.set_trigger_selector('XI_TRG_SEL_EXPOSURE_ACTIVE')
+        cam_os.set_gpi_mode('GPO_EXPOSURE_ACTIVE')
+        cam_od.set_gpi_source('XI_TRG_EDGE_RISING')
+
+#         #         xiSetParamInt(handle2, XI_PRM_GPI_SELECTOR, 1);
+# #         xiSetParamInt(handle2, XI_PRM_GPI_MODE,  XI_GPI_TRIGGER);
+# #         xiSetParamInt(handle2, XI_PRM_TRG_SOURCE, XI_TRG_EDGE_RISING);
+        
+#         left_cam.set_trigger_source('XI_TRG_EDGE_RISING')
+#         right_cam.set_trigger_source('XI_TRG_EDGE_RISING')
+# left_cam.set_trigger_selector('XI_TRG_SEL_EXPOSURE_ACTIVE')
+# right_cam.set_trigger_selector('XI_TRG_SEL_EXPOSURE_ACTIVE')
+
+# left_cam.set_gpi_mode('XI_GPI_TRIGGER')
+# right_cam.set_gpi_mode('XI_GPI_TRIGGER')
+
+        cam_od_im = xiapi.Image()
+        cam_od.start_acquisition()
+        
         cam_os_im = xiapi.Image()
         cam_os.start_acquisition()
         
         for i in range(max_frames):
+            
+#         // set trigger mode on camera1 - as master
+#         xiSetParamInt(handle1, XI_PRM_TRG_SOURCE, XI_TRG_SOFTWARE);
+#         xiSetParamInt(handle1, XI_PRM_GPO_SELECTOR, 1);
+#         xiSetParamInt(handle1, XI_PRM_GPO_MODE,  XI_GPO_EXPOSURE_ACTIVE); // Note1
+#         // set trigger mode on camera2 - as slave
+#         xiSetParamInt(handle2, XI_PRM_GPI_SELECTOR, 1);
+#         xiSetParamInt(handle2, XI_PRM_GPI_MODE,  XI_GPI_TRIGGER);
+#         xiSetParamInt(handle2, XI_PRM_TRG_SOURCE, XI_TRG_EDGE_RISING);
+#         // start
+#         xiStartAcquisition(handle1);
+#         xiStartAcquisition(handle2);
+#         Sleep(1234); // wait for right moment to trigger the exposure
+#         // trigger acquisition on Master camera
+#         xiSetParamInt(handle1, XI_PRM_TRG_SOFTWARE, 1);
+#         // get image from both cameras
+#         xiGetImage(handle1, 100, &image1);
+#         xiGetImage(handle2, 100, &image2);
+
+            
+        #HANDLE handle;
+        # xiOpenDevice(0, &handle);
+        # // set trigger mode
+        # xiSetParamInt(handle, XI_PRM_TRG_SOURCE, XI_TRG_SOFTWARE);
+        # // set digital output 1 mode
+        # xiSetParamInt(handle, XI_PRM_GPO_SELECTOR, 1);
+        # xiSetParamInt(handle, XI_PRM_GPO_MODE,  XI_GPO_FRAME_ACTIVE);
+        # xiStartAcquisition(handle);
+
+        # Sleep(1234); // wait for right moment to trigger the exposure
+        # xiSetParamInt(handle, XI_PRM_TRG_SOFTWARE, 1);
+        # xiGetImage(handle, 100, &image);
+        # // process image1 here
+        # Sleep(10); // on most cameras the next trigger should be delayed
+        # xiSetParamInt(handle, XI_PRM_TRG_SOFTWARE, 1);
+        # xiGetImage(handle, 100, &image);
+        # // process image2 here
+
+        #print str(increment_val)
+        #get data and pass them from camera to img
+        ##    left_cam.get_image(img_left)
+        ##    right_cam.get_image(img_right)
+        #left_cam.get_image(img_left)
+        #right_cam.get_image(img_right)
+
+        #get raw data from camera
+        #for Python2.x function returns string
+        #for Python3.x function returns bytes
+        #left_cam_data = img_left.get_image_data_numpy()
+        #right_cam_data = img_right.get_image_data_numpy()
+           
             
             #get images and timestamps
             time_pre = time.time()
