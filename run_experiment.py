@@ -8,7 +8,7 @@ import queue
 def write_queue_to_file(save_folder, queue):
     '''
     Write queue to file to save timestamps, matching frame number to timestamp'''
-    queue_savefile = os.path.join(save_folder,'timestamps.txt')
+    queue_savefile = os.path.join(save_folder,'timestamps.tsv')
     with open(queue_savefile, 'w') as f:
         f.write(f'frame\tos\tod\n')
         while not queue.empty():
@@ -38,13 +38,13 @@ def save_frame_timestamp(frame_data, i, save_folder, timestamp):
     
     return()
 
-def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):    
+def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):    
     '''
     Aquire images from ximea cameras and save them.
     Parameters:
         save_folder (str): name of folder to save images
         frame_rate (int): how fast should we collect?
-        maxframes (int): max number of frames to collect (mostly for testing)
+        max_frames (int): max number of frames to collect (mostly for testing)
     Returns:
         None
     ''' 
@@ -54,8 +54,8 @@ def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):
     
     #camera_settings
     cam_timing_mode='XI_ACQ_TIMING_MODE_FREE_RUN'
-    cam_exposure=100
-    cam_framerate=200
+    cam_exposure=10
+    cam_framerate=None #200
     cam_gain=10
     
     #prep camera od
@@ -95,7 +95,7 @@ def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):
         cam_os_im = xiapi.Image()
         cam_os.start_acquisition()
         
-        for i in range(maxframes):
+        for i in range(max_frames):
             
             #get images and timestamps
             time_pre = time.time()
@@ -129,7 +129,7 @@ def run_ximea_aquisition(save_folder, frame_rate, maxframes=10):
             os_save_thread.daemon = True
             os_save_thread.start()
             
-        print(f'Sampled to max num frames of {maxframes}')
+        print(f'Sampled to max num frames of {max_frames}')
         print('Cleanly Stopping Device Aquisition and closing file.')
         
         #stop acquisition
@@ -200,7 +200,7 @@ def run_realsense_aquisition(save_folder, frame_rate):
     print('Finished Realsense Aquisition.')
 
 
-def run_experiment(subject_name=None, task_name=None, exp_type=None, save_dir='./capture'):
+def run_experiment(subject_name=None, task_name=None, exp_type=None, save_dir='./capture', max_frames=10):
     
     '''
     Run a data collection, either pre or post calibration, or an experiment.
@@ -257,7 +257,7 @@ def run_experiment(subject_name=None, task_name=None, exp_type=None, save_dir='.
     #scenecam_thread.daemon = True  # Daemonize thread
     #scenecam_thread.start()        # Start the execution
     print(f'Starting scene aquisition at {frame_rate}fps...')
-    run_ximea_aquisition(scene_cam_folder, frame_rate)
+    run_ximea_aquisition(scene_cam_folder, frame_rate, max_frames=max_frames)
     
     
     return()

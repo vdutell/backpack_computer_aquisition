@@ -3,6 +3,8 @@ import numpy as np
 import cv2
 import imageio
 import multiprocessing as mp
+import re
+import matplotlib.pyplot as plt
 
 def convert_bin_png(filename, save_folder, im_shape=(1544,2064)):
     '''
@@ -33,11 +35,55 @@ def convert_bin_png(filename, save_folder, im_shape=(1544,2064)):
     return()
 
 def convert_folder(read_folder, write_folder):
+    '''
+    Convert a folder of raw .bin files to .pngs
+    Params:
+        read_folder (str): where are .bin files stored?
+        write_folder (str): where should we write the pngs to?
+    '''
     #loop through files in folder
     for f in os.listdir(read_folder):
         if f.endswith(".bin"):
             convert_bin_png(os.path.join(read_folder,f), write_folder)
             print('*')
+            
+def calc_timestamp_stats(timestamp_file, write_folder):
+    '''
+      Figure out how well we did with timing in terms of capturing images
+      Params:
+          timestamp_file (str): tsv file holding timestamp data
+          write_folder (str): folder to store output stats
+    '''
+    with open(timestamp_file, 'r') as f:
+        ts_table=list(zip(line.strip().split('\t') for line in f))
+#        print(ts_table)
+#         line = f.readline() #column headers
+#         while(line):
+#             line = f.readline()
+#             print(line)
+#             frame, os, od = [re.split(line.strip(), '\t')]
+#             print(frame, os, od)
+        f.close()
+    ts_table = np.squeeze(np.array(ts_table[1:]).astype('float'))
+    lr_camera_dcaps = ts_table[:,1] - ts_table[:,2]
+    os_dts = ts_table[1:,1] - ts_table[:-1,1]
+    od_dts = ts_table[1:,2] - ts_table[:-1,2]
+    
+    print(f'Mean camera time disparity: {np.mean(lr_camera_dcaps):.4f} seconds')
+    print(f'Mean OS dts: {np.mean(os_dts):.4f} seconds')
+    print(f'Mean OD dts: {np.mean(od_dts):.4f} seconds')
+    
+    
+    plt.hist(lr_camera_dcaps, label = 'OD/OS Disparity', alpha=0.6, bins=30);
+    plt.hist(os_dts, label = 'OS dt', alpha=0.6, bins=30);
+    plt.hist(od_dts, label = 'OD dt', alpha=0.6, bins=30);
+    plt.legend()
+    plt.ylabel('Seconds')
+    plt.title('Timing Disparity for World Camera')
+    plt.show()
+    plt.savefig(os.path.join(write_folder,'timestamp_stats.png'))
+    
+    
         
 def run_ximea_analysis(capture_folder, analysis_folder):
     '''
@@ -45,19 +91,24 @@ def run_ximea_analysis(capture_folder, analysis_folder):
     '''
 
     try:
+        
+        #calcuate stats on frame capture
+        calc_timestamp_stats(os.path.join(capture_folder,'timestamps.tsv'),
+                            analysis_folder)
+        
         #OS
         os_cap_folder = os.path.join(capture_folder,'cam_os')
         os_ana_folder = os.path.join(analysis_folder,'cam_os')
         if not os.path.exists(os_ana_folder):
             os.makedirs(os_ana_folder)
-        convert_folder(os_cap_folder, os_ana_folder)
+        #convert_folder(os_cap_folder, os_ana_folder)
 
         #same for OD
         od_cap_folder = os.path.join(capture_folder,'cam_od')
         od_ana_folder = os.path.join(analysis_folder,'cam_od')
         if not os.path.exists(od_ana_folder):
             os.makedirs(od_ana_folder)
-        convert_folder(od_cap_folder, od_ana_folder)
+        #convert_folder(od_cap_folder, od_ana_folder)
 
     except Exception as e:
         print(e)
