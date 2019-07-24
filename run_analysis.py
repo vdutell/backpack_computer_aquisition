@@ -45,7 +45,6 @@ def convert_folder(read_folder, write_folder):
     for f in os.listdir(read_folder):
         if f.endswith(".bin"):
             convert_bin_png(os.path.join(read_folder,f), write_folder)
-            print('*')
             
 def calc_timestamp_stats(timestamp_file, write_folder):
     '''
@@ -68,15 +67,17 @@ def calc_timestamp_stats(timestamp_file, write_folder):
     lr_camera_dcaps = ts_table[:,1] - ts_table[:,2]
     os_dts = ts_table[1:,1] - ts_table[:-1,1]
     od_dts = ts_table[1:,2] - ts_table[:-1,2]
+    cy_dts = ts_table[1:,3] - ts_table[:-1,3]
     
     print(f'Mean camera time disparity: {np.mean(lr_camera_dcaps):.4f} seconds')
     print(f'Mean OS dts: {np.mean(os_dts):.4f} seconds')
     print(f'Mean OD dts: {np.mean(od_dts):.4f} seconds')
-    
+    print(f'Mean CY dts: {np.mean(cy_dts):.4f} seconds')    
     
     plt.hist(lr_camera_dcaps, label = 'OD/OS Disparity', alpha=0.6, bins=30);
     plt.hist(os_dts, label = 'OS dt', alpha=0.6, bins=30);
     plt.hist(od_dts, label = 'OD dt', alpha=0.6, bins=30);
+    plt.hist(cy_dts, label = 'CY dt', alpha=0.6, bins=30);
     plt.legend()
     plt.ylabel('Seconds')
     plt.title('Timing Disparity for World Camera')
@@ -109,6 +110,13 @@ def run_ximea_analysis(capture_folder, analysis_folder):
         if not os.path.exists(od_ana_folder):
             os.makedirs(od_ana_folder)
         convert_folder(od_cap_folder, od_ana_folder)
+        
+        #same for CY
+        cy_cap_folder = os.path.join(capture_folder,'cam_cy')
+        cy_ana_folder = os.path.join(analysis_folder,'cam_cy')
+        if not os.path.exists(cy_ana_folder):
+            os.makedirs(cy_ana_folder)
+        convert_folder(cy_cap_folder, cy_ana_folder)
 
     except Exception as e:
         print(e)
