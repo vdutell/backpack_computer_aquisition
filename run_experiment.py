@@ -33,6 +33,7 @@ def save_frame_timestamp(frame_data, i, save_folder, timestamp):
     with open(filename, 'wb') as f:
         f.write(frame_data)
         f.close()
+        print('#',end='')
         
     ###TODO: Write to a queue taht will contain our timestamps instead of in filename
     
@@ -91,16 +92,15 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
                                              exposure=cam_exposure,
                                              framerate=cam_framerate,
                                              gain=cam_gain)
-
         
-        #set camera 1 as master
-        cam_od.set_trigger_source('XI_TRG_SOFTWARE')
-        cam_od.set_trigger_selector('XI_TRG_SEL_EXPOSURE_ACTIVE')
-        cam_od.set_gpi_mode('XI_GPO_EXPOSURE_ACTIVE')
-        #set camera 2 as slave
-        cam_os.set_trigger_selector('XI_TRG_SEL_EXPOSURE_ACTIVE')
-        cam_os.set_gpi_mode('GPO_EXPOSURE_ACTIVE')
-        cam_od.set_gpi_source('XI_TRG_EDGE_RISING')
+#         #set camera 1 as master
+#         cam_od.set_trigger_source('XI_TRG_SOFTWARE')
+#         cam_od.set_trigger_selector('XI_TRG_SEL_EXPOSURE_ACTIVE')
+#         cam_od.set_gpi_mode('XI_GPO_EXPOSURE_ACTIVE')
+#         #set camera 2 as slave
+#         cam_os.set_trigger_selector('XI_TRG_SEL_EXPOSURE_ACTIVE')
+#         cam_os.set_gpi_mode('GPO_EXPOSURE_ACTIVE')
+#         cam_od.set_gpi_source('XI_TRG_EDGE_RISING')
 
 #         #         xiSetParamInt(handle2, XI_PRM_GPI_SELECTOR, 1);
 # #         xiSetParamInt(handle2, XI_PRM_GPI_MODE,  XI_GPI_TRIGGER);
@@ -120,7 +120,10 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
         cam_os_im = xiapi.Image()
         cam_os.start_acquisition()
         
+        save_jobs = []
+        
         for i in range(max_frames):
+            print('*',end='')
             
 #         // set trigger mode on camera1 - as master
 #         xiSetParamInt(handle1, XI_PRM_TRG_SOURCE, XI_TRG_SOFTWARE);
@@ -174,11 +177,13 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
            
             
             #get images and timestamps
-            time_pre = time.time()
+            time_pre = time.monotonic()
             cam_od.get_image(cam_od_im)
-            time_mid = time.time()
+            time_mid = time.monotonic()
             cam_os.get_image(cam_os_im)
-            time_post = time.time()
+            time_post = time.monotonic()
+            #xiSetParamInt(handle1, XI_PRM_TRG_SOFTWARE, 1);
+
             
             #pull image from cameras
             cam_od_data = cam_od_im.get_image_data_raw()
@@ -195,7 +200,8 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
                                               cam_od_folder,
                                               cam_od_time))
             od_save_thread.daemon = True
-            od_save_thread.start()            
+            od_save_thread.start()      
+            save_jobs.append(od_save_thread)
             
             os_save_thread = mp.Process(target=save_frame_timestamp, 
                                         args=(cam_os_data,
@@ -204,6 +210,8 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
                                               cam_os_time))  
             os_save_thread.daemon = True
             os_save_thread.start()
+            save_jobs.append(os_save_thread)
+
             
         print(f'Sampled to max num frames of {max_frames}')
         print('Cleanly Stopping Device Aquisition and closing file.')
@@ -216,7 +224,13 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
         cam_os.close_device()
         
         #write queue timestamps
+        print('Writing Queue of Timestamps')
         write_queue_to_file(save_folder, q)
+        
+        #waiting for saves
+        print('Waiting for save threads to finish')
+        for job in save_jobs:
+            job.join()
 
         
     except KeyboardInterrupt:
