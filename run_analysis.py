@@ -86,7 +86,7 @@ def calc_timestamp_stats(timestamp_file, write_folder):
    
     
         
-def run_ximea_analysis(capture_folder, analysis_folder):
+def run_ximea_analysis(capture_folder, analysis_folder, timestamp_stats=True, convert_ims=True):
     '''
     Analyze video data, including converting .bin files to png files.
     '''
@@ -94,36 +94,39 @@ def run_ximea_analysis(capture_folder, analysis_folder):
     try:
         
         #calcuate stats on frame capture
-        calc_timestamp_stats(os.path.join(capture_folder,'timestamps.tsv'),
-                            analysis_folder)
+        if(timestamp_stats):
+            calc_timestamp_stats(os.path.join(capture_folder,'timestamps.tsv'),
+                                analysis_folder)
         
-        #OS
-        os_cap_folder = os.path.join(capture_folder,'cam_os')
-        os_ana_folder = os.path.join(analysis_folder,'cam_os')
-        if not os.path.exists(os_ana_folder):
-            os.makedirs(os_ana_folder)
-        convert_folder(os_cap_folder, os_ana_folder)
+        if(convert_ims):
+            #OS
+            os_cap_folder = os.path.join(capture_folder,'cam_os')
+            os_ana_folder = os.path.join(analysis_folder,'cam_os')
+            if not os.path.exists(os_ana_folder):
+                os.makedirs(os_ana_folder)
+            convert_folder(os_cap_folder, os_ana_folder)
 
-        #same for OD
-        od_cap_folder = os.path.join(capture_folder,'cam_od')
-        od_ana_folder = os.path.join(analysis_folder,'cam_od')
-        if not os.path.exists(od_ana_folder):
-            os.makedirs(od_ana_folder)
-        convert_folder(od_cap_folder, od_ana_folder)
-        
-        #same for CY
-        cy_cap_folder = os.path.join(capture_folder,'cam_cy')
-        cy_ana_folder = os.path.join(analysis_folder,'cam_cy')
-        if not os.path.exists(cy_ana_folder):
-            os.makedirs(cy_ana_folder)
-        convert_folder(cy_cap_folder, cy_ana_folder)
+            #same for OD
+            od_cap_folder = os.path.join(capture_folder,'cam_od')
+            od_ana_folder = os.path.join(analysis_folder,'cam_od')
+            if not os.path.exists(od_ana_folder):
+                os.makedirs(od_ana_folder)
+            convert_folder(od_cap_folder, od_ana_folder)
+
+            #same for CY
+            cy_cap_folder = os.path.join(capture_folder,'cam_cy')
+            cy_ana_folder = os.path.join(analysis_folder,'cam_cy')
+            if not os.path.exists(cy_ana_folder):
+                os.makedirs(cy_ana_folder)
+            convert_folder(cy_cap_folder, cy_ana_folder)
 
     except Exception as e:
         print(e)
         print('Problem with analzing saved scene camera files. Tell Vasha to make more informative error reporting!')
 
 def run_analysis(subject_name=None, task_name=None, exp_type=None, 
-                 read_dir='./capture', save_dir='./analysis'):
+                 read_dir='./capture', save_dir='./analysis',
+                 run_timestamp_stats=True, run_convert_ims=True):
     
     '''
     Run a data analysis, on a pre or post calibration, or an experiment.
@@ -149,7 +152,9 @@ def run_analysis(subject_name=None, task_name=None, exp_type=None,
     
     #run sceme camera analysis
     print('Running Frame Analysis...')
-    run_ximea_analysis(scene_cam_read_folder, scene_cam_save_folder)
+    run_ximea_analysis(scene_cam_read_folder, scene_cam_save_folder,
+                       timestamp_stats=run_timestamp_stats,
+                       convert_ims=run_convert_ims)
     
     #run eye tracker analysis
     #run IMU analysis
