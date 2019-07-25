@@ -64,26 +64,33 @@ def calc_timestamp_stats(timestamp_file, write_folder):
 #             print(frame, os, od)
         f.close()
     ts_table = np.squeeze(np.array(ts_table[1:]).astype('float'))
-    lr_camera_dcaps = ts_table[:,1] - ts_table[:,2]
+    lr_camera_dcaps = np.abs(ts_table[:,1] - ts_table[:,2])
     os_dts = ts_table[1:,1] - ts_table[:-1,1]
     od_dts = ts_table[1:,2] - ts_table[:-1,2]
     cy_dts = ts_table[1:,3] - ts_table[:-1,3]
+    
+    print(ts_table)
     
     print(f'Mean camera time disparity: {np.mean(lr_camera_dcaps):.4f} seconds')
     print(f'Mean OS dts: {np.mean(os_dts):.4f} seconds')
     print(f'Mean OD dts: {np.mean(od_dts):.4f} seconds')
     print(f'Mean CY dts: {np.mean(cy_dts):.4f} seconds')    
     
-    plt.hist(lr_camera_dcaps, label = 'OD/OS Disparity', alpha=0.6, bins=30);
     plt.hist(os_dts, label = 'OS dt', alpha=0.6, bins=30);
     plt.hist(od_dts, label = 'OD dt', alpha=0.6, bins=30);
     plt.hist(cy_dts, label = 'CY dt', alpha=0.6, bins=30);
     plt.legend()
     plt.ylabel('Seconds')
-    plt.title('Timing Disparity for World Camera')
-    plt.savefig(os.path.join(write_folder,'timestamp_stats.png'))
+    plt.title('Within CameraTiming Disparity for World Camera')
+    plt.savefig(os.path.join(write_folder,'timestamp_stats_within_cam.png'))
     plt.show()
    
+    plt.hist(lr_camera_dcaps, label = 'OD/OS Disparity', alpha=0.6, bins=30);
+    plt.legend()
+    plt.ylabel('Seconds')
+    plt.title('Between Camera Timing Disparity for World Camera')
+    plt.savefig(os.path.join(write_folder,'timestamp_stats_between_cam.png'))
+    plt.show()
     
         
 def run_ximea_analysis(capture_folder, analysis_folder, timestamp_stats=True, convert_ims=True):

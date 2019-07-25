@@ -23,7 +23,9 @@ def print_cam_settings(cam):
     return()
 
 def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
-                        gain=None, img_format=None, auto_wb=None):
+                        gain=None, img_format=None, 
+                        auto_wb=None, transport_packing=None,
+                        ):
     """
     Apply settings to the camera
     """
@@ -47,8 +49,11 @@ def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
     if(auto_wb):
         cam.set_param('auto_wb', 1)
         #cam.set_auto_wb(auto_wb)
-
-
+    if(transport_packing):
+        cam.set_imgdataformat('XI_RAW16')
+        camp.set_param('output_data_bit_depth', 10)
+        cam.enable_transport_packing()
+        
     return(cam)
     
 
