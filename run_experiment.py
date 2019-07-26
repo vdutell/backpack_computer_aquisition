@@ -1,25 +1,24 @@
 import os
-import multiprocessing as mp, queue
+from multiprocessing import Process, Queue
 import time
 from ximea import xiapi
 import ximea_cam_aquire_save as ximtools
-#import queue
+import numpy as np
 
-def write_queue_to_file(save_folder, queue):
+def write_queue_to_file(save_folder, q):
     '''
     Write queue to file to save timestamps, matching frame number to timestamp'''
     queue_savefile = os.path.join(save_folder,'timestamps.tsv')
     with open(queue_savefile, 'w') as f:
         f.write(f'frame\tos\tod\tcy\n')
-        while not queue.empty():
-            f.write(queue.get())
+        while not q.empty():
+            f.write(q.get())
             f.write('\n')
-            queue.task_done()
         f.close()
     return()
         
 
-def run_queue_worker(queue, save_folder):
+def run_queue_worker(q, save_folder):
     '''
     Start an infinite loop for a process that pops the oldest image from the queue and saves it to disk
     Params:
@@ -27,25 +26,18 @@ def run_queue_worker(queue, save_folder):
         save_folder (str): name of the folder we write to 
     '''
     i=0
-    print('Queue Started')
+    print('Saving Queue Started...')
     #while not queue.empty() & i>10:
     while True:
         #pop a frame from the queue
-        try:
-            frame_data = queue.get()
-            filename = os.path.join(save_folder, f'frame_{i}.bin')
-            print(filename)   
-            i+=1
-        except Empty:
-            print('$',end='')
-        #save it as a file
-
-        #with open(filename, 'wb') as f:
-        #    f.write(frame_data)
-        #    f.close()
-        #print('#',end='')
-        #queue.task_done()
-    return()
+        print('#',end='')
+        filename = os.path.join(save_folder, f'frame_{i}.bin')
+        frame_data = q.get()
+        with open(filename, 'wb') as f:
+            f.write(frame_data)
+            f.close()
+        print('#',end='')
+        i+=1
     
 
 def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):    
@@ -60,16 +52,18 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
     ''' 
     
     #queues to save camera and timestamp data
-    q_ts = queue.Queue()
-    q_od = queue.Queue()    
-    q_os = queue.Queue()
-    q_cy = queue.Queue()   
+    q_ts = Queue()
+    q_od = Queue()    
+    q_os = Queue()
+    q_cy = Queue()
+    queue_list = [q_ts, q_od, q_os, q_cy]
     
     #camera_settings
     cam_timing_mode='XI_ACQ_TIMING_MODE_FREE_RUN'
     cam_image_format='XI_RAW16'
-    cam_exposure=50
-    cam_framerate=500 #200
+    cam_bpp = 12
+    cam_framerate=frame_rate #200
+    cam_exposure= np.int(np.around(1e6*(1.0/frame_rate))) #in microseconds
     cam_gain=10
     
     #prep camera od
@@ -99,7 +93,9 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
                                              timing_mode=cam_timing_mode,
                                              exposure=cam_exposure,
                                              framerate=cam_framerate,
-                                             gain=cam_gain)
+                                             gain=cam_gain,
+                                             img_format=cam_image_format,
+                                             img_bpp = cam_bpp)
         #left camera (OS)
         cam_os = xiapi.Camera()
         cam_os.open_device_by_SN(cam_os_id)
@@ -108,7 +104,9 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
                                              timing_mode=cam_timing_mode,
                                              exposure=cam_exposure,
                                              framerate=cam_framerate,
-                                             gain=cam_gain)
+                                             gain=cam_gain,
+                                             img_format=cam_image_format,
+                                             img_bpp = cam_bpp)
  
           #cyclopean camera (CY)
 #         cam_cy = xiapi.Camera()
@@ -118,19 +116,21 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
 #                                              timing_mode=None,
 #                                              exposure=cam_exposure,
 #                                              framerate=cam_framerate,
-#                                              gain=cam_gain)
+#                                              gain=cam_gain,
+#                                              img_format=cam_image_format,
+#                                              img_bpp = cam_bpp)
 
     
         #start our job saving threads
-        os_save_thread = mp.Process(target=run_queue_worker, args=(q_os, cam_os_folder))
+        os_save_thread = Process(target=run_queue_worker, args=(q_os, cam_os_folder))
         os_save_thread.daemon = True
         os_save_thread.start()      
         
-        od_save_thread = mp.Process(target=run_queue_worker, args=(q_od, cam_od_folder))
+        od_save_thread = Process(target=run_queue_worker, args=(q_od, cam_od_folder))
         od_save_thread.daemon = True
         od_save_thread.start()      
         
-        cy_save_thread = mp.Process(target=run_queue_worker, args=(q_cy, cam_cy_folder))
+        cy_save_thread = Process(target=run_queue_worker, args=(q_cy, cam_cy_folder))
         cy_save_thread.daemon = True
         cy_save_thread.start()      
         
@@ -139,6 +139,9 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
         save_jobs.append(os_save_thread)
         save_jobs.append(od_save_thread)
         save_jobs.append(cy_save_thread)
+#         save_jobs.append(q_os)
+#         save_jobs.append(q_od)
+#         save_jobs.append(q_cy)
         
         #setup image handles and start aquisition
         cam_od_im = xiapi.Image()
@@ -191,22 +194,17 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
         cam_od.close_device()
         cam_os.close_device()
         #cam_cy.close_device()
-         
-        #tell queue runners they can finish
-        q_od.task_done()
-        q_os.task_done()
-        q_cy.task_done()
     
         
         #write queue timestamps
-        print('Writing Queue of Timestamps')
+        print('Writing Queue of Timestamps...')
         write_queue_to_file(save_folder, q_ts)
         
-        #wait for saves
-        print('Waiting for save threads to finish')
-        for job in save_jobs:
-            job.join()
-
+        #wait for all queues to be empty (all files saved)
+        print('Waiting for save threads/queues to finish...')
+        for qu in queue_list:
+            while not qu.empty():
+                pass
         
     except KeyboardInterrupt:
         print('Detected Keyboard Interrupt. Stopping Acquisition Cleanly')
@@ -304,7 +302,7 @@ def run_experiment(subject_name=None, task_name=None, exp_type=None, save_dir='.
     imu_folder = os.path.join(save_folder, 'imu')
 
     #start collection for eye tracker (pupil labs)
-    eyetracker_thread = mp.Process(target=run_pupillabs_aquisition, 
+    eyetracker_thread = Process(target=run_pupillabs_aquisition, 
                                         args=(eye_cam_folder, frame_rate))
     eyetracker_thread.daemon = True  # Daemonize thread
     eyetracker_thread.start()        # Start the execution   
@@ -312,7 +310,7 @@ def run_experiment(subject_name=None, task_name=None, exp_type=None, save_dir='.
     
 
     #start collection for IMUS (intel realsense)
-    imu_thread = mp.Process(target=run_realsense_aquisition, 
+    imu_thread = Process(target=run_realsense_aquisition, 
                                         args=(imu_folder, frame_rate))
     imu_thread.daemon = True  # Daemonize thread
     imu_thread.start()        # Start the execution   

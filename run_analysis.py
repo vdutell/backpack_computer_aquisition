@@ -1,12 +1,11 @@
 import os
 import numpy as np
 import cv2
-import imageio
 import multiprocessing as mp
 import re
 import matplotlib.pyplot as plt
 
-def convert_bin_png(filename, save_folder, im_shape=(1544,2064)):
+def convert_bin_png(filename, save_folder, im_shape=(1544,2064), im_format='XI_RAW16'):
     '''
     Take a file saved in .bin format from a ximea camera, and convert it to a png image.
     Parameters:
@@ -16,20 +15,22 @@ def convert_bin_png(filename, save_folder, im_shape=(1544,2064)):
     Returns:
         None
     '''
+    
     fname, _ = os.path.splitext(os.path.basename(filename))
     save_filepath = os.path.join(save_folder, fname + '.png')
     binary_img = []
     with open(filename, 'rb') as f:
-        byte = f.read(1)
+        byte = f.read(2)
         while(byte):
+            #for raw_16 img is large and small bytes alternating
             byte = f.read(1)
-            b = int.from_bytes(byte,'big')
-            binary_img.append(b)
+            byte_big = f.read(1)
+            binary_img.append(int.from_bytes(byte_big+byte,'big'))
         f.close()
     
     im = np.array(binary_img).reshape(im_shape)
-    im = cv2.cvtColor(np.uint8(im), cv2.COLOR_BayerGR2RGB)
-    imageio.imwrite(save_filepath, im)
+    im = cv2.cvtColor(np.uint16(im), cv2.COLOR_BayerGR2RGB)
+    cv2.imwrite(save_filepath, im)
     print('*',end='')
     
     return()
@@ -106,6 +107,14 @@ def run_ximea_analysis(capture_folder, analysis_folder, timestamp_stats=True, co
                                 analysis_folder)
         
         if(convert_ims):
+ 
+            #OD
+            od_cap_folder = os.path.join(capture_folder,'cam_od')
+            od_ana_folder = os.path.join(analysis_folder,'cam_od')
+            if not os.path.exists(od_ana_folder):
+                os.makedirs(od_ana_folder)
+            convert_folder(od_cap_folder, od_ana_folder)
+            
             #OS
             os_cap_folder = os.path.join(capture_folder,'cam_os')
             os_ana_folder = os.path.join(analysis_folder,'cam_os')
@@ -113,12 +122,6 @@ def run_ximea_analysis(capture_folder, analysis_folder, timestamp_stats=True, co
                 os.makedirs(os_ana_folder)
             convert_folder(os_cap_folder, os_ana_folder)
 
-            #same for OD
-            od_cap_folder = os.path.join(capture_folder,'cam_od')
-            od_ana_folder = os.path.join(analysis_folder,'cam_od')
-            if not os.path.exists(od_ana_folder):
-                os.makedirs(od_ana_folder)
-            convert_folder(od_cap_folder, od_ana_folder)
 
             #same for CY
             cy_cap_folder = os.path.join(capture_folder,'cam_cy')
