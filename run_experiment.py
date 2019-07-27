@@ -65,7 +65,7 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
     cam_framerate=frame_rate #200
     cam_exposure= np.int(np.around(1e6*(1.0/frame_rate))) #in microseconds
     print(f'Setting cam exposure to {cam_exposure/1000} ms')
-    cam_gain=20
+    cam_gain=10
     
     #prep camera od
     cam_od_id = 'XECAS1922000'
