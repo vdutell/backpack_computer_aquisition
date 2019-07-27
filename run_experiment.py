@@ -64,7 +64,8 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
     cam_bpp = 12
     cam_framerate=frame_rate #200
     cam_exposure= np.int(np.around(1e6*(1.0/frame_rate))) #in microseconds
-    cam_gain=10
+    print(f'Setting cam exposure to {cam_exposure/1000} ms')
+    cam_gain=20
     
     #prep camera od
     cam_od_id = 'XECAS1922000'
@@ -88,6 +89,16 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
         #right camera (OD)
         cam_od = xiapi.Camera()
         cam_od.open_device_by_SN(cam_od_id)
+
+        #left camera (OS)
+        cam_os = xiapi.Camera()
+        cam_os.open_device_by_SN(cam_os_id)
+
+          #cyclopean camera (CY)
+#         cam_cy = xiapi.Camera()
+#         cam_cy.open_device_by_SN(cam_cy_id)
+
+
         #apply camera settings
         cam_od = ximtools.apply_cam_settings(cam_od,
                                              timing_mode=cam_timing_mode,
@@ -96,10 +107,6 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
                                              gain=cam_gain,
                                              img_format=cam_image_format,
                                              img_bpp = cam_bpp)
-        #left camera (OS)
-        cam_os = xiapi.Camera()
-        cam_os.open_device_by_SN(cam_os_id)
-        #apply camera settings
         cam_os = ximtools.apply_cam_settings(cam_os,
                                              timing_mode=cam_timing_mode,
                                              exposure=cam_exposure,
@@ -107,11 +114,6 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
                                              gain=cam_gain,
                                              img_format=cam_image_format,
                                              img_bpp = cam_bpp)
- 
-          #cyclopean camera (CY)
-#         cam_cy = xiapi.Camera()
-#         cam_cy.open_device_by_SN(cam_cy_id)
-#         #apply camera settings
 #         cam_cy = ximtools.apply_cam_settings(cam_cy,
 #                                              timing_mode=None,
 #                                              exposure=cam_exposure,
