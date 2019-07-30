@@ -2,7 +2,6 @@ import os
 from multiprocessing import Process, Queue
 import time
 from ximea import xiapi
-import ximea_cam_aquire_save as ximtools
 import numpy as np
 
 def write_queue_to_file(save_folder, q):
@@ -38,6 +37,44 @@ def run_queue_worker(q, save_folder):
             f.close()
         print('#',end='')
         i+=1
+        
+        
+def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
+                        gain=None, img_format=None, img_bpp=None,
+                        auto_wb=None, transport_packing=None,
+                        ):
+        """
+        Apply settings to the camera
+        """
+
+        #Exposure:
+        if(exposure):
+            cam.set_exposure(exposure)
+        #Mode:
+        if(timing_mode):
+            cam.set_acq_timing_mode(timing_mode)
+        #Framerate:
+        if(framerate):
+            cam.set_framerate(framerate)
+        #Gain:
+        if(gain):
+            cam.set_gain(gain)
+        #Format:
+        if(img_format):
+            cam.set_imgdataformat(img_format)
+        #BPP Sensor:
+        if(img_bpp):
+            cam.set_imgdataformat(img_format)
+        #White Blalance
+        if(auto_wb):
+            cam.set_param('auto_wb', 1)
+            #cam.set_auto_wb(auto_wb)
+        if(transport_packing):
+            cam.set_imgdataformat('XI_RAW16')
+            camp.set_param('output_data_bit_depth', 16) #12
+            cam.enable_transport_packing()
+
+        return(cam)
     
 
 def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):    
@@ -60,7 +97,7 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
     
     #camera_settings
     cam_timing_mode='XI_ACQ_TIMING_MODE_FREE_RUN'
-    cam_image_format='XI_RAW16'
+    cam_image_format='XI_RAW8' #'XI_RAW16'
     cam_bpp = 12
     cam_framerate=frame_rate #200
     cam_exposure= np.int(np.around(1e6*(1.0/frame_rate))) #in microseconds
@@ -100,21 +137,21 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
 
 
         #apply camera settings
-        cam_od = ximtools.apply_cam_settings(cam_od,
+        cam_od =apply_cam_settings(cam_od,
                                              timing_mode=cam_timing_mode,
                                              exposure=cam_exposure,
                                              framerate=cam_framerate,
                                              gain=cam_gain,
                                              img_format=cam_image_format,
                                              img_bpp = cam_bpp)
-        cam_os = ximtools.apply_cam_settings(cam_os,
+        cam_os = apply_cam_settings(cam_os,
                                              timing_mode=cam_timing_mode,
                                              exposure=cam_exposure,
                                              framerate=cam_framerate,
                                              gain=cam_gain,
                                              img_format=cam_image_format,
                                              img_bpp = cam_bpp)
-#         cam_cy = ximtools.apply_cam_settings(cam_cy,
+#         cam_cy = apply_cam_settings(cam_cy,
 #                                              timing_mode=None,
 #                                              exposure=cam_exposure,
 #                                              framerate=cam_framerate,

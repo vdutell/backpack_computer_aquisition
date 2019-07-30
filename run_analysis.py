@@ -5,13 +5,14 @@ from multiprocessing import Process
 import re
 import matplotlib.pyplot as plt
 
-def convert_bin_png(filename, save_folder, im_shape=(1544,2064), im_format='XI_RAW16'):
+def convert_bin_png(filename, save_folder, im_shape=(1544,2064), img_format='XI_RAW8'):
     '''
     Take a file saved in .bin format from a ximea camera, and convert it to a png image.
     Parameters:
         filename (str): file to be converted
         save_folder (str): folder to save png files
         im_shape (2pule ints): shape of image
+        img_format (str): Image format files are saved
     Returns:
         None
     '''
@@ -19,21 +20,36 @@ def convert_bin_png(filename, save_folder, im_shape=(1544,2064), im_format='XI_R
     fname, _ = os.path.splitext(os.path.basename(filename))
     save_filepath = os.path.join(save_folder, fname + '.png')
     binary_img = []
-    with open(filename, 'rb') as f:
-        bs = f.read(2)
-        while(bs):
-            #for raw_16 img is large and small bytes alternating
-            bs = f.read(1)
-            bs_b = f.read(1)
-            byte = int.from_bytes(bs,'big')
-            byte_big = int.from_bytes(bs_b,'big')
-            #print(256*byte_big+byte)
-            binary_img.append((256*byte_big+byte))
-        f.close()
     
-    im = np.array(binary_img).reshape(im_shape)
-    im = cv2.cvtColor(np.uint16(im), cv2.COLOR_BayerGR2RGB)
-    im = im.astype(np.uint16)
+    if(img_format=='XI_RAW16'):
+        with open(filename, 'rb') as f:
+            bs = f.read(2)
+            while(bs):
+                #for raw_16 img is large and small bytes alternating
+                bs = f.read(1)
+                bs_b = f.read(1)
+                byte = int.from_bytes(bs,'big')
+                byte_big = int.from_bytes(bs_b,'big')
+                #print(256*byte_big+byte)
+                binary_img.append((256*byte_big+byte))
+            f.close()
+    
+        im = np.array(binary_img).reshape(im_shape)
+        im = cv2.cvtColor(np.uint16(im), cv2.COLOR_BayerGR2RGB)
+        im = im.astype(np.uint16)
+        
+    elif(img_format=='XI_RAW8'):
+        with open(filename, 'rb') as f:
+            bs = f.read(1)
+            while(bs):
+                bs = f.read(1)
+                bs = int.from_bytes(bs,'big')
+                binary_img.append(bs)
+            f.close()
+        im = np.array(binary_img).reshape(im_shape)
+        im = cv2.cvtColor(np.uint8(im), cv2.COLOR_BayerGR2RGB)
+        im = im.astype(np.uint8)
+        
     cv2.imwrite(save_filepath, im)
     print('*',end='')
     
