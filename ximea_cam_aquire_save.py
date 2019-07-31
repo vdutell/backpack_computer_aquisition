@@ -54,7 +54,7 @@ def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
         #cam.set_auto_wb(auto_wb)
     if(transport_packing):
         cam.set_imgdataformat('XI_RAW16')
-        camp.set_param('output_data_bit_depth', 16) #12
+        cam.set_param('output_data_bit_depth', 16) #12
         cam.enable_transport_packing()
         
     return(cam)

@@ -4,7 +4,8 @@ import time
 from ximea import xiapi
 import numpy as np
 
-def write_queue_to_file(save_folder, q):
+
+def write_timestamp_queue(save_folder, q):
     '''
     Write queue to file to save timestamps, matching frame number to timestamp'''
     queue_savefile = os.path.join(save_folder,'timestamps.tsv')
@@ -15,6 +16,36 @@ def write_queue_to_file(save_folder, q):
             f.write('\n')
         f.close()
     return()
+    
+def write_sync_queue(save_folder, q):
+    '''
+    Write queue to file to save syncronizations'''    
+    queue_savefile = os.path.join(save_folder,'timestamp_sync.tsv')
+    with open(queue_savefile, 'w') as f:
+        f.write('cam\tcam_time\twall_time\tdt\n')
+        while not q.empty():
+            f.write(q.get())
+            f.write('\n')
+        f.close()
+    return()
+
+def get_sync_string(cam_name, cam_handle):
+    '''
+    Clock camera and wall clocks together to ensure they match
+    Params:
+        cam_name (str): String name of camera (ie cam_od/cam_os/cam_cy
+        cam_handle (XimeaCamera instance): camera handle to query time
+    Returns:
+        sync_string (str): string to write to file with cam name, time, and wall time
+    '''
+    t_wall_1 = time.monotonic()
+    t_cam = cam_handle.get_param('timestamp')
+    t_cam = t_cam/(1e9) #this is returned in nanoseconds, change to seconds
+    t_wall_2 = time.monotonic()
+    t_wall = np.mean((t_wall_1, t_wall_2)) #take middle of two wall times
+    dt = t_cam - t_wall
+    sync_string = f'{cam_name}\t{t_wall}\t{t_cam}\t{dt}'
+    return(sync_string)
         
 
 def run_queue_worker(q, save_folder):
@@ -38,6 +69,7 @@ def run_queue_worker(q, save_folder):
         print('#',end='')
         i+=1
         
+
         
 def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
                         gain=None, img_format=None, img_bpp=None,
@@ -89,11 +121,12 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
     ''' 
     
     #queues to save camera and timestamp data
-    q_ts = Queue()
-    q_od = Queue()    
-    q_os = Queue()
-    q_cy = Queue()
-    queue_list = [q_ts, q_od, q_os, q_cy]
+    q_ts = Queue() #timestamps of frames
+    q_sy = Queue() #timestamp sync
+    q_od = Queue() #camera frames
+    q_os = Queue() #caemra frames
+    q_cy = Queue() #camera frames
+    queue_list = [q_ts, q_sy, q_od, q_os, q_cy]
     
     #camera_settings
     cam_timing_mode='XI_ACQ_TIMING_MODE_FREE_RUN'
@@ -117,7 +150,7 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
         os.makedirs(cam_os_folder)
     
     #prep camera cy
-    cam_cy_id = 'DUMMY FOR NOW'
+    cam_cy_id = 'DUMMY_FOR_NOW'
     cam_cy_folder = os.path.join(save_folder,'cam_cy')
     if not os.path.exists(cam_cy_folder):
         os.makedirs(cam_cy_folder)
@@ -135,6 +168,15 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
 #         cam_cy = xiapi.Camera()
 #         cam_cy.open_device_by_SN(cam_cy_id)
 
+        #synchronize our watches! (match wall clock to camera timestamp)
+        print('Recording Timestamp Syncronization Pre...')
+        od_ss = get_sync_string('cam_od_pre', cam_od)
+        os_ss = get_sync_string('cam_os_pre', cam_os)
+        #cy_ss = get_sync_string('cam_cy_pre', cam_cy)
+        cy_ss = os_ss #temporaray
+        q_sy.put(od_ss)
+        q_sy.put(os_ss)
+        q_sy.put(cy_ss)
 
         #apply camera settings
         cam_od =apply_cam_settings(cam_od,
@@ -198,16 +240,20 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
             cam_os.get_image(cam_os_im)
             cam_os_ts_s = cam_os_im.tsSec
             cam_os_ts_u = cam_os_im.tsUSec
+            cam_os_fnum = cam_os_im.nframe
             
             cam_od.get_image(cam_od_im)
             cam_od_ts_s = cam_od_im.tsSec
             cam_od_ts_u = cam_od_im.tsUSec
+            cam_od_fnum = cam_od_im.nframe
             
             #cam_cy.get_image(cam_cy_im)
             #cam_cy_ts_s = cam_cy_im.tsSec
             #cam_cy_ts_u = cam_cy_im.tsUSec
+            #cam_cy_fnum = cam_od_im.nframe
             cam_cy_ts_s = cam_od_ts_s
             cam_cy_ts_u = cam_od_ts_u
+            cam_cy_fnum = cam_od_im.nframe
            
             #pull image from cameras
             cam_od_data = cam_od_im.get_image_data_raw()
@@ -215,7 +261,9 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
             cam_cy_data = cam_os_data #for now use dummy data 
             
             #calcuate the exact timestamp we took the image, add to timestamp queue
-            q_ts.put(f'{i}\t{cam_os_ts_s}.{cam_os_ts_u}\t{cam_od_ts_s}.{cam_od_ts_u}\t{cam_cy_ts_s}.{cam_cy_ts_u}')
+            q_ts.put(f'{i}\t{cam_os_fnum}:{cam_os_ts_s}.{cam_os_ts_u}\t' +
+                            f'{cam_od_fnum}:{cam_od_ts_s}.{cam_od_ts_u}\t' +
+                            f'{cam_cy_fnum}:{cam_cy_ts_s}.{cam_cy_ts_u}')
             # put cam data in camera frame queues
             q_od.put(cam_od_data)
             q_os.put(cam_os_data)
@@ -224,6 +272,18 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
             
         print(f'Sampled to max num frames of {max_frames}')
         print('Cleanly Stopping Device Aquisition and closing file.')
+        
+        #synchronize our watches! (match wall clock to camera timestamp)
+        print('Recording Timestamp Syncronization Post...')
+        od_ss = get_sync_string('cam_od_post', cam_od)
+        os_ss = get_sync_string('cam_os_post', cam_os)
+        #cy_ss = get_sync_string('cam_cy_post', cam_cy)
+        cy_ss = os_ss #temporaray
+        q_sy.put(od_ss)
+        q_sy.put(os_ss)
+        q_sy.put(cy_ss)
+        print('Writing Queue of Timestamps...')
+        write_sync_queue(save_folder, q_sy)
         
         #stop acquisition
         cam_od.stop_acquisition()
@@ -237,7 +297,7 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
         
         #write queue timestamps
         print('Writing Queue of Timestamps...')
-        write_queue_to_file(save_folder, q_ts)
+        write_timestamp_queue(save_folder, q_ts)
         
         #wait for all queues to be empty (all files saved)
         print('Waiting for save threads/queues to finish...')
@@ -248,22 +308,17 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
     except KeyboardInterrupt:
         print('Detected Keyboard Interrupt. Stopping Acquisition Cleanly')
         
-        #stop acquisition
-        cam_od.stop_acquisition()
-        cam_os.stop_acquisition()
-        #cam_cy.stop_acquisition()
-        #stop communication
-        cam_od.close_device()
-        cam_os.close_device()
-        #cam_cy.close_device()
-
-        #write queue timestamps
-        write_queue_to_file(save_folder, q_ts)
-
- 
-    except Exception as e:
-        print(e)
-        print('There was an Error. Cleanly Stopping Device Aquisition and closing file.')
+        #synchronize our watches! (match wall clock to camera timestamp)
+        print('Recording Timestamp Syncronization Post...')
+        od_ss = get_sync_string('cam_od_post', cam_od)
+        os_ss = get_sync_string('cam_os_post', cam_os)
+        #cy_ss = get_sync_string('cam_cy_post', cam_cy)
+        cy_ss = os_ss #temporaray
+        q_sy.put(od_ss)
+        q_sy.put(os_ss)
+        q_sy.put(cy_ss)
+        print('Writing Queue of Timestamps...')
+        write_sync_queue(save_folder, q_sy)
         
         #stop acquisition
         cam_od.stop_acquisition()
@@ -275,9 +330,37 @@ def run_ximea_aquisition(save_folder, frame_rate, max_frames=10):
         #cam_cy.close_device()
 
         #write queue timestamps
-        write_queue_to_file(save_folder, q_ts)
+        write_timestamp_queue(save_folder, q_ts)
 
-    
+ 
+    except Exception as e:
+        print(e)
+        print('There was an Error. Cleanly Stopping Device Aquisition and closing file.')
+        
+        #synchronize our watches! (match wall clock to camera timestamp)
+        print('Recording Timestamp Syncronization Post...')
+        od_ss = get_sync_string('cam_od_post', cam_od)
+        os_ss = get_sync_string('cam_os_post', cam_os)
+        #cy_ss = get_sync_string('cam_cy_post', cam_cy)
+        cy_ss = os_ss #temporaray
+        q_sy.put(od_ss)
+        q_sy.put(os_ss)
+        q_sy.put(cy_ss)
+        print('Writing Queue of Timestamps...')
+        write_sync_queue(save_folder, q_sy)
+        
+        #stop acquisition
+        cam_od.stop_acquisition()
+        cam_os.stop_acquisition()
+        #cam_cy.stop_acquisition()
+        #stop communication
+        cam_od.close_device()
+        cam_os.close_device()
+        #cam_cy.close_device()
+
+        #write queue timestamps
+        write_timestamp_queue(save_folder, q_ts)
+
     print('Finished Ximea Aquisition.')
 
 def run_pupillabs_aquisition(save_folder, frame_rate):
