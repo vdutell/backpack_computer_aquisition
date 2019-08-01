@@ -57,7 +57,15 @@ def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
         cam.set_imgdataformat('XI_RAW16')
         cam.set_param('output_data_bit_depth', 16) #12
         cam.enable_transport_packing()
-
+        
+        
+def write_new_timestamp_file(cam_name, save_folder):
+    
+    ts_file_name = os.path.join(save_folder, f"timestamps_{cam_name}.tsv")
+    
+    with open(ts_file_name, 'w') as timestamp_file:
+        timestamp_file.write(f"i\tnframe\ttime\n")
+        
             
 def save_queue_worker(cam_name, save_queue, save_folder):
     
@@ -72,7 +80,7 @@ def save_queue_worker(cam_name, save_queue, save_folder):
 
         with open(bin_file, 'wb') as f, open(ts_file_name, 'a+') as ts_file:
             f.write(image.raw_data)
-            ts_file.write(f"{i}\t{image.nframe}\t{image.tsSec}.{image.tsUSec}\n")
+            ts_file.write(f"{i}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
             
         i+=1
 
@@ -104,9 +112,9 @@ def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_frames, **setti
     s.update(settings)
     settings = s
     
-    settings['exposure'] = np.int(np.around(1e6*(1.0/settings['framerate'])))
+    settings['exposure'] = np.int(np.around(1e6*(1.0/settings['framerate'])))-2000
     
-    exp_time = settings['exposure'] / 1000
+    exp_time = (settings['exposure'] / 1000)
     print(f"Setting cam exposure to {exp_time} ms")
     
     try:
@@ -156,9 +164,11 @@ def ximea_acquire(save_folder, max_frames=100, **settings):
     
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
-        
+    
+    #start save threads
     save_threads = []
     for i, cam in enumerate(cameras):
+        write_new_timestamp_file(cam, save_folder)
         proc = mp.Process(target=save_queue_worker,
                                        args=(cam,
                                              save_queues[i],
@@ -166,7 +176,8 @@ def ximea_acquire(save_folder, max_frames=100, **settings):
         proc.daemon = True
         proc.start()
         save_threads.append(proc)
-        
+    
+    #start aquisition threads
     acquisition_threads = []
     for i, (cam_name, cam_sn) in enumerate(cameras.items()):
         proc = mp.Process(target=acquire_camera,
