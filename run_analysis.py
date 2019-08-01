@@ -84,16 +84,26 @@ def calc_timestamp_stats(timestamp_file, write_folder):
 #             frame, os, od = [re.split(line.strip(), '\t')]
 #             print(frame, os, od)
         f.close()
+    
     ts_table = np.squeeze(np.array(ts_table[1:]).astype('float'))
+    #calculate dts between frames
     lr_camera_dcaps = np.abs(ts_table[:,1] - ts_table[:,2])
-    os_dts = ts_table[1:,1] - ts_table[:-1,1]
-    od_dts = ts_table[1:,2] - ts_table[:-1,2]
-    cy_dts = ts_table[1:,3] - ts_table[:-1,3]
+    os_dts = ts_table[1:,2] - ts_table[:-1,2]
+    od_dts = ts_table[1:,4] - ts_table[:-1,4]
+    cy_dts = ts_table[1:,6] - ts_table[:-1,6]
+    #calculate frame skips
+    os_skips = (ts_table[1:,1] - ts_table[:-1,1]) - 1
+    od_skips = (ts_table[1:,3] - ts_table[:-1,3]) - 1
+    cy_skips = (ts_table[1:,5] - ts_table[:-1,5]) - 1
     
     print(f'Mean camera time disparity: {np.mean(lr_camera_dcaps):.4f} seconds')
     print(f'Mean OS dts: {np.mean(os_dts):.4f} seconds')
     print(f'Mean OD dts: {np.mean(od_dts):.4f} seconds')
     print(f'Mean CY dts: {np.mean(cy_dts):.4f} seconds')    
+    
+    print(f'Mean OS skips: {np.mean(os_skips):.2f} frames')
+    print(f'Mean OD skips: {np.mean(od_skips):.2f} frames')
+    print(f'Mean CY skips: {np.mean(cy_skips):.2f} frames')   
     
     plt.hist(os_dts, label = 'OS dt', alpha=0.6, bins=30);
     plt.hist(od_dts, label = 'OD dt', alpha=0.6, bins=30);
@@ -121,6 +131,17 @@ def calc_timestamp_stats(timestamp_file, write_folder):
     plt.legend()
     plt.title('DT Over Collection')
     plt.savefig(os.path.join(write_folder,'dt_over_collection.png'))
+    plt.show()
+    
+    plt.plot(os_skips,label='OS skips')
+    plt.plot(od_skips,label='OD skips')
+    plt.plot(cy_skips,label='CY skips')
+    plt.axhline(0, label='Zero')
+    plt.xlabel('capture number')
+    plt.ylabel('Skipped Frames')
+    plt.legend()
+    plt.title('Skipped Frames Over Collection')
+    plt.savefig(os.path.join(write_folder,'skipped_frames_over_collection.png'))
     plt.show()
     
 def run_ximea_analysis(capture_folder, analysis_folder, timestamp_stats=True, convert_ims=True):
