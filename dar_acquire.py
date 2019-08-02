@@ -57,6 +57,7 @@ def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
         cam.set_imgdataformat('XI_RAW16')
         cam.set_param('output_data_bit_depth', 16) #12
         cam.enable_transport_packing()
+    return(cam)
         
         
 def write_new_timestamp_file(cam_name, save_folder):
@@ -112,7 +113,7 @@ def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_frames, **setti
     s.update(settings)
     settings = s
     
-    settings['exposure'] = np.int(np.around(1e6*(1.0/settings['framerate'])))-2000
+    settings['exposure'] = np.int(np.around(1e6*(1.0/settings['framerate'])))-1000
     
     exp_time = (settings['exposure'] / 1000)
     print(f"Setting cam exposure to {exp_time} ms")
@@ -125,7 +126,7 @@ def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_frames, **setti
         sync_str = get_sync_string(cam_name + "_pre", camera)
         sync_queue.put(sync_str)
         
-        apply_cam_settings(camera, **settings)
+        camera = apply_cam_settings(camera, **settings)
         
         camera.start_acquisition()
         
@@ -150,7 +151,7 @@ def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_frames, **setti
         print(f"Camera {cam_name} aquisition finished")
         
 
-def ximea_acquire(save_folder, max_frames=100, **settings):
+def ximea_acquire(save_folder, max_frames=5000, **settings):
     
     # queues do we need?
     # 3 x save_queues
