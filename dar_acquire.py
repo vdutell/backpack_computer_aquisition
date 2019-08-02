@@ -113,7 +113,7 @@ def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_frames, **setti
     s.update(settings)
     settings = s
     
-    settings['exposure'] = np.int(np.around(1e6*(1.0/settings['framerate'])))-1000
+    settings['exposure'] = np.int(np.around(1e6*(1.0/settings['framerate'])))-25
     
     exp_time = (settings['exposure'] / 1000)
     print(f"Setting cam exposure to {exp_time} ms")
