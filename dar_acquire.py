@@ -68,7 +68,7 @@ def write_new_timestamp_file(cam_name, save_folder):
         timestamp_file.write(f"i\tnframe\ttime\n")
         
             
-def save_queue_worker(cam_name, save_queue, save_folder):
+def save_queue_worker(cam_name, save_queue, save_folder, ims_per_file=500):
     
     i = 0
     if not os.path.exists(os.path.join(save_folder, cam_name)):
@@ -76,12 +76,19 @@ def save_queue_worker(cam_name, save_queue, save_folder):
 
     ts_file_name = os.path.join(save_folder, f"timestamps_{cam_name}.tsv")
     while True:
-        bin_file = os.path.join(save_folder, cam_name, f'frame_{i}.bin')
-        image = save_queue.get()
-
-        with open(bin_file, 'wb') as f, open(ts_file_name, 'a+') as ts_file:
-            f.write(image.raw_data)
-            ts_file.write(f"{i}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
+        imstr_list = []
+        tsstr_list = []
+        fstart=i*ims_per_file
+        # create filestrings and timestamp strings to write in batch
+        for j in range(ims_per_file):
+            image = save_queue.get()
+            imstr_list.append(image.raw_data)
+            tsstr_list.append(f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
+            if(j==ims_per_file-1):
+                bin_file = os.path.join(save_folder, cam_name, f'frames_{fstart}_{fstart+ims_per_file-1}.bin')
+                with open(bin_file, 'wb') as f, open(ts_file_name, 'a+') as ts_file:
+                    f.write(b"".join(imstr_list))
+                    ts_file.write("".join(tsstr_list))
             
         i+=1
 
