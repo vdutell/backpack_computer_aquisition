@@ -1,150 +1,278 @@
-from ximea import xiapi
-import pickle as pickle
+import copy
+import multiprocessing as mp
 import time
-import traceback
+import os
+import numpy as np
+from ximea import xiapi
+from collections import namedtuple
 
-def print_cam_settings(cam):
-    """
-    Print current camera settings
-    """
-    #Exposure
-    print(f'Exposure is set to {cam.get_exposure()} us = {cam.get_exposure()/1000} ms')
-    #Gain
-    print(f'Gain is set to {cam.get_gain()}')
-    #aquisition mode
-    print(f'Mode is set to {cam.get_acq_timing_mode()}')
-    #Framerate
-    print(f'Framerate is set to {cam.get_framerate()} fps')
-    #data format
-    print(f'Data format is set to {cam.get_imgdataformat()}')
-    #white balance
-    #print(f'White balance is set to {cam.get_autowb()}')
+frame_data = namedtuple("frame_data", "raw_data nframe tsSec tsUSec")
 
-    return()
+default_settings = {"timing_mode":  'XI_ACQ_TIMING_MODE_FREE_RUN',
+                    "img_format": "XI_RAW8",
+                    'framerate': 200,
+                    'gain': 10,
+                    'transport_packing': False,
+                    'sensor_bit_depth': "XI_BPP_8",
+                    'output_bit_depth': "XI_BPP_8",
+                    'bandwidth_limit': None #4800
+                   }
+
+def get_sync_string(cam_name, cam_handle):
+    '''
+    Clock camera and wall clocks together to ensure they match
+    Params:
+        cam_name (str): String name of camera (ie cam_od/cam_os/cam_cy
+        cam_handle (XimeaCamera instance): camera handle to query time
+    Returns:
+        sync_string (str): string to write to file with cam name, time, and wall time
+    '''
+    t_wall_1 = time.monotonic()
+    t_cam = cam_handle.get_param('timestamp')
+    t_cam = t_cam/(1e9) #this is returned in nanoseconds, change to seconds
+    t_wall_2 = time.monotonic()
+    t_wall = np.mean((t_wall_1, t_wall_2)) #take middle of two wall times
+    dt = t_cam - t_wall
+    sync_string = f'{cam_name}\t{t_wall}\t{t_cam}\t{dt}'
+    return(sync_string)
+
 
 def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
-                        gain=None, img_format=None, img_bpp=None,
+                        gain=None, img_format=None,
                         auto_wb=None, transport_packing=None,
+                        sensor_bit_depth=None,
+                        output_bit_depth=None,
+                        bandwidth_limit=None,
+                        report_settings=True
                         ):
     """
     Apply settings to the camera
     """
-
-    #Exposure:
-    if(exposure):
-        cam.set_exposure(exposure)
-    #Mode:
-    if(timing_mode):
-        cam.set_acq_timing_mode(timing_mode)
-    #Framerate:
-    if(framerate):
-        cam.set_framerate(framerate)
-    #Gain:
-    if(gain):
-        cam.set_gain(gain)
-    #Format:
-    if(img_format):
-        cam.set_imgdataformat(img_format)
-    #BPP Sensor:
-    if(img_bpp):
-        cam.set_imgdataformat(img_format)
-    #White Blalance
-    if(auto_wb):
-        cam.set_param('auto_wb', 1)
-        #cam.set_auto_wb(auto_wb)
-    if(transport_packing):
-        cam.set_imgdataformat('XI_RAW16')
-        cam.set_param('output_data_bit_depth', 16) #12
-        cam.enable_transport_packing()
-        
-    return(cam)
     
-
-def aquire_save_fullset(num_frames=10, cam_timing_mode='XI_ACQ_TIMING_MODE_FREE_RUN', 
-                        cam_exposure=500, 
-                         cam_framerate=1000, cam_gain=1, img_format='XI_RAW8',
-                         img_autowb=1,
-                         verbose=True):
-    """
-    Aquire a set of files and only save after they have all been collected
-    """
-    #create instance for first connected camera
-    cam = xiapi.Camera()
-
-    #start communication
-
-    if(verbose):
-        print('Opening first camera...')
-    cam.open_device()
-    #to open specific device, use:
-    #cam.open_device_by_SN('1922001')
-    #(open by serial number)
-
-    try:
-
-        #apply settings to our camera device
-        cam = apply_cam_settings(cam, timing_mode=cam_timing_mode, exposure=cam_exposure, 
-                                framerate=cam_framerate, gain=cam_gain, img_format=img_format,
-                                auto_wb=img_autowb)
-        if(verbose):
-            print_cam_settings(cam)
-
-        #create instance of Image to store image data and metadata
-        img = xiapi.Image()
-
-        #start data acquisition
-        if(verbose):
-            print(f'Starting data acquisition of {num_frames} frames...',end='')
-        cam.start_acquisition()
-
-        ims = []
-
-        #time start
-        tic = time.clock()
-        for i in range(num_frames):
-            if(verbose):
-                print('*',end='')
-            #get data and pass them from camera to img
-            cam.get_image(img)
-
-            #get raw data from camera
-            #for Python2.x function returns string
-            #for Python3.x function returns bytes
-            data_raw = img.get_image_data_raw()
-            ims.append(data_raw)
-
-        #time stop
-        toc = time.clock()
-        if(verbose):
-            print(f'\nEffective Speed: {num_frames/(toc-tic):.2f} FPS')
-
-        #stop data acquisition
-        if(verbose):
-            print('Stopping acquisition...')
-        cam.stop_acquisition()
-
-        #stop communication
-        cam.close_device()
-
-        #save data: write to bitearray
-        if(verbose):
-            print(f'Saving data...', end='')
-        for i in range(len(ims)):
-            with open(f'capture/batch/data_raw_bytes_{i}.bin', 'wb') as f:
-                f.write(ims[i])
-                if(verbose):
-                    print('*',end='')
-        if(verbose):
-            print(f'Done!') 
-
-        if(verbose):
-            print('Done.')
+    #first reset settings
+    cam.get_device_reset()
+    
+    if exposure is not None:
+        #print(f'Setting Exposure to {exposure}')
+        cam.set_exposure(exposure)
+    if timing_mode is not None:
+        #print(f'Setting Timing Mode to {timing_mode}')
+        cam.set_acq_timing_mode(timing_mode)
+    if framerate is not None:
+        #print(f'Setting framerate to {framerate}')
+        cam.set_framerate(framerate)
+    if gain is not None:
+        #print(f'Setting gain to {gain}')
+        cam.set_gain(gain)
+    if img_format is not None:
+        #print(f'Setting img_format to {img_format}')
+        cam.set_imgdataformat(img_format)
+    if sensor_bit_depth is not None:
+        #print(f'Setting sensor bit depth to {sensor_bit_depth}')
+        cam.set_param('sensor_bit_depth', output_bit_depth)
+    if output_bit_depth is not None:
+        #print(f'Setting output bit depth to {sensor_bit_depth}')
+        cam.set_param('output_bit_depth', output_bit_depth)
+    if auto_wb is not None:
+        #print(f'Setting auto_wb to {auto_wb}')
+        cam.set_param('auto_wb', 1)
+    # NOTE: Transport Packing overrides bit depth and image format settings
+    if transport_packing is not None:
+        #print(f'Setting transport_packing to {transport_packing}')
+        if(transport_packing==True):
+            cam.set_imgdataformat('XI_RAW16')
+            cam.set_param('output_bit_depth', 'XI_BPP_10')
+            cam.enable_output_bit_packing()
+    if bandwidth_limit is not None:
+        print(f'Limiting bandwidth to {bandwidth_limit}')
+        cam.set_param('limit_bandwidth', bandwidth_limit)
+        cam.set_limit_bandwidth(bandwidth_limit)
         
-        return()
+    if(report_settings):
+        #exposure time
+        print(f'Exposure is set to {cam.get_exposure()/1000} ms')
+        # timing mode
+        print(f'Timing Mode is set to {cam.get_acq_timing_mode()}')
+        # max framerate
+        print(f'Max Framerate is set to {cam.get_framerate()}')
+        # gain
+        print(f'Gain is set to {cam.get_gain()}')
+        # img data format
+        print(f'Image Data Format is set to {cam.get_imgdataformat()}')
+        # white balance
+        wb = cam.get_param('auto_wb')
+        print(f'Auto Whtie Balance is set to {wb}')
+        # auto exposure gain
+        print(f'AutoExpostureGain is set to {cam.is_aeag()}')
+        # bit detph
+        sbd = cam.get_param('sensor_bit_depth')
+        obd = cam.get_param('output_bit_depth')
+        print(f'Bit Depth is set to {sbd}(sensor),{obd}(output)')
+        # im size
+        print(f'Im Size is set to {cam.get_width()},{cam.get_height()}')
+        # bandwidth
+        bw = cam.get_param('limit_bandwidth')
+        print(f'Bandwidth limit is set to {bw}')
+        # buffer size
+        print(f'Buffer Size is set to {cam.get_acq_buffer_size()}')
+    return(cam)
+        
+      
+def save_queue_worker(cam_name, save_queue, save_folder, ims_per_file):
+    
+    #setup folder structure and file
+    if not os.path.exists(os.path.join(save_folder, cam_name)):
+        os.makedirs(os.path.join(save_folder, cam_name))
+    ts_file_name = os.path.join(save_folder, f"timestamps_{cam_name}.tsv")
+    with open(ts_file_name, 'w') as timestamp_file:
+        timestamp_file.write(f"i\tnframe\ttime\n")
+        
+    i = 0
+    grbgim = save_queue.get().raw_data
+    imlen = len(grbgim)
+    imstr_array = bytearray(ims_per_file * grbgim) #empty byte string the size of image batches
+    while True:
+        tsstr_list = []
+        fstart=i*ims_per_file
+        for j in range(ims_per_file):
+            image = save_queue.get()
+            imstr_array[j*imlen:j*imlen+imlen] = image.raw_data
+            tsstr_list.append(f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
+            #if we're at the end of our batch, write to file
+            if(j==ims_per_file-1):
+                bin_file = os.path.join(save_folder, cam_name, f'frames_{fstart}_{fstart+ims_per_file-1}.bin')
+                with open(bin_file, 'wb') as f, open(ts_file_name, 'a+') as ts_file:
+                    f.write(imstr_array)
+                    ts_file.write(''.join(tsstr_list))
+        i+=1
 
-    except Exception as e:
-        print('Something Failed. Cleanly closing the device.')
-        #stop communication
-        cam.close_device()
+def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seconds, **settings):
+    """
+    Acquire frames from a single camera.
+    
+    Parameters:
+        cam_id (str):  The serial number of the camera
+        cam_name (str): A text name for the camera
+        sync_queue (Multithreading.Queue): A queue which accepts the sync strings
+        save_queue (Mutlithreading.Queue): A queue which accepts xiapi.Images
+        max_collection_seconds (int): the maximum number of seconds to run
+        
+        Any keywords which are present in default_settings may also be passed as 
+        keyword arguments to this function as well.
+        IE:
+            acquire_camera("some_id",
+                           "a camera",
+                           Q,
+                           Q2,
+                           10,
+                           timing_mode=None,
+                           framerate=None, ...)
+   
+    """  
+    
+    s = copy.deepcopy(default_settings)
+    s.update(settings)
+    settings = s
+    
+    settings['exposure'] = np.int(np.around(1e6*(1.0/settings['framerate'])))-25 #25
+    
+    #cyclopean camera captures fast, binocular cameras capture slower
+    if(cam_name=='cy'):
+        settings['bandwidth_limit'] = 5688
+        settings['framerate'] = 200
+    else:
+        settings['bandwidth_limit'] = 3792
+        settings['framerate'] = 100
+   
+    exp_time = (settings['exposure'] / 1000)
+    
+    max_frames = max_collection_seconds * settings['framerate']
+    
+    try:
+        camera = xiapi.Camera()
+        camera.open_device_by_SN(cam_id)
+        
+        print('Recording Timestamp Syncronization Pre...')
+        sync_str = get_sync_string(cam_name + "_pre", camera)
+        sync_queue.put(sync_str)
+        
+        camera = apply_cam_settings(camera, **settings)
+        
+        
+        camera.start_acquisition()
+        
+        image = xiapi.Image()
+        for _ in range(max_frames):
+            camera.get_image(image)
+            save_queue.put(frame_data(image.get_image_data_raw(),
+                                      image.nframe,
+                                      image.tsSec,
+                                      image.tsUSec))
+        print(f'Reached {max_frames} frames collected. Exiting.')
+        
+    except KeyboardInterrupt:
+        print('Detected Keyboard Interrupt. Stopping Acquisition')
+        sync_str = get_sync_string(cam_name + "_post", camera)
+        sync_queue.put(sync_str)
+        
+    finally:
+        print(f"Camera {cam_name} Cleanup...")
+        camera.stop_acquisition()
+        camera.close_device()
+    
+        print(f"Camera {cam_name} aquisition finished")
+        
 
-        return(e)
+def ximea_acquire(save_folder, max_collection_time=5000, ims_per_file=100, **settings):
+    
+    # 3 x save_queues
+    # 3 x sync_queues
+    
+    cameras = {'od': "XECAS1922000",
+               'os': "XECAS1922001",
+               'cy': "XECAS1930001"}
+    
+    save_queues = [mp.Queue() for _ in cameras]
+    sync_queues = [mp.Queue() for _ in cameras]
+    
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
+    
+    #start save threads
+    save_threads = []
+    for i, cam in enumerate(cameras):
+        proc = mp.Process(target=save_queue_worker,
+                                       args=(cam,
+                                             save_queues[i],
+                                             save_folder,
+                                             ims_per_file))
+        proc.daemon = True
+        proc.start()
+        save_threads.append(proc)
+    
+    #start aquisition threads
+    acquisition_threads = []
+    for i, (cam_name, cam_sn) in enumerate(cameras.items()):
+        proc = mp.Process(target=acquire_camera,
+                          args=(cam_sn,
+                                cam_name,
+                                sync_queues[i],
+                                save_queues[i],
+                                max_collection_time),
+                          kwargs=settings)
+        acquisition_threads.append(proc)
+        proc.daemon = True
+    
+    print("Starting acquisition threads...")
+    for proc in acquisition_threads:
+        proc.start()
+
+    print("Aquiring Until Finished...")
+    for proc in acquisition_threads:
+        proc.join()
+    
+    print("Finished Aquiring. Waiting for Save Queues to Empty...")
+    for q in save_queues:
+        while not q.empty():
+            time.sleep(1)
+    print("All Done!")

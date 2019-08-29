@@ -68,7 +68,7 @@ def write_new_timestamp_file(cam_name, save_folder):
         timestamp_file.write(f"i\tnframe\ttime\n")
         
             
-def save_queue_worker(cam_name, save_queue, save_folder, ims_per_file=500):
+def save_queue_worker(cam_name, save_queue, save_folder, ims_per_file=50):
     
     i = 0
     if not os.path.exists(os.path.join(save_folder, cam_name)):
@@ -120,7 +120,7 @@ def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_frames, **setti
     s.update(settings)
     settings = s
     
-    settings['exposure'] = np.int(np.around(1e6*(1.0/settings['framerate'])))-25
+    settings['exposure'] = np.int(np.around(1e6*(1.0/settings['framerate'])))-50 #25
     
     exp_time = (settings['exposure'] / 1000)
     print(f"Setting cam exposure to {exp_time} ms")

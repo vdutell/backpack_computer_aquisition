@@ -235,3 +235,67 @@ def run_analysis(subject_name=None, task_name=None, exp_type=None,
     
     print("Finished Anaysis!")
     
+
+    
+def count_missed_frames(timestamp_file, cam_name):
+    with open(timestamp_file, 'r') as f:
+        ts_table=list(zip(line.strip().split('\t') for line in f))
+    
+    ts_table = np.squeeze(np.array(ts_table[1:]).astype('float'))
+    total_frames = ts_table.shape[0]
+    nf = ts_table[:,1]
+    df = nf[1:] - nf[:-1] - 1
+    df = np.sum(df)
+    dfp = df / total_frames * 100
+    
+    print(f'{cam_name} missed frames total: {df} / {total_frames} = {dfp:0.2f}%')
+    
+    return(dfp)
+    
+
+def plot_camera_timing(timestamp_file, figwrite_file, cam_name):
+    with open(timestamp_file, 'r') as f:
+        ts_table=list(zip(line.strip().split('\t') for line in f))
+    
+    ts_table = np.squeeze(np.array(ts_table[1:]).astype('float'))
+    ts = ts_table[:,2]
+    dt = ts[1:] - ts[:-1]
+
+    med_dt = np.median(dt)
+    med_fr = 1/np.median(dt)
+    mean_dt = np.mean(dt)
+    mean_fr = 1/np.mean(dt)
+
+    plt.plot(dt)
+    plt.axhline(med_dt,label=f'median: {med_dt:.5f} = {med_fr:.2f}fps',c='black')
+    plt.axhline(0.005,label='200fps',c='red')
+    plt.axhline(mean_dt,label=f'mean: {mean_dt:.5f} = {mean_fr:.2f}fps',c='green')
+    plt.plot(dt, label='sample', c='blue')
+    plt.ylabel('dt')
+    plt.legend()
+    plt.title(f'{cam_name} Camera Timing')
+    plt.savefig(figwrite_file)
+    plt.show()
+    
+def plot_camera_dframe(timestamp_file, figwrite_file, cam_name):
+    with open(timestamp_file, 'r') as f:
+        ts_table=list(zip(line.strip().split('\t') for line in f))
+    
+    ts_table = np.squeeze(np.array(ts_table[1:]).astype('float'))
+    ts = ts_table[:,1]
+    dt = ts[1:] - ts[:-1]
+
+    med_dt = np.median(dt)
+    mean_dt = np.mean(dt)
+    
+
+    plt.plot(dt)
+    plt.axhline(1,label='All Frames Kept',c='red')
+    plt.axhline(med_dt,label=f'median: {med_dt:.5f}',c='black')
+    plt.axhline(mean_dt,label=f'mean: {mean_dt:.5f}',c='green')
+    plt.plot(dt, label='sample', c='blue')
+    plt.ylabel('dframe')
+    plt.legend()
+    plt.title(f'{cam_name} Camera Dframes')
+    plt.savefig(figwrite_file)
+    plt.show()
