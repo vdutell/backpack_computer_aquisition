@@ -58,9 +58,6 @@ def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
     if timing_mode is not None:
         #print(f'Setting Timing Mode to {timing_mode}')
         cam.set_acq_timing_mode(timing_mode)
-    if framerate is not None:
-        #print(f'Setting framerate to {framerate}')
-        cam.set_framerate(framerate)
     if gain is not None:
         #print(f'Setting gain to {gain}')
         cam.set_gain(gain)
@@ -87,6 +84,9 @@ def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
         print(f'Limiting bandwidth to {bandwidth_limit}')
         cam.set_param('limit_bandwidth', bandwidth_limit)
         cam.set_limit_bandwidth(bandwidth_limit)
+    if framerate is not None:
+        #print(f'Setting framerate to {framerate}')
+        cam.set_framerate(framerate)
         
     if(report_settings):
         #exposure time
@@ -174,16 +174,17 @@ def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seco
     s.update(settings)
     settings = s
     
-    settings['exposure'] = np.int(np.around(1e6*(1.0/settings['framerate'])))-25 #25
-    
     #cyclopean camera captures fast, binocular cameras capture slower
     if(cam_name=='cy'):
         settings['bandwidth_limit'] = 5688
         settings['framerate'] = 200
+        doffset_framerate = 25
     else:
         settings['bandwidth_limit'] = 3792
         settings['framerate'] = 100
-   
+        doffset_framerate = 10
+    #set exposure in relation to framerate
+    settings['exposure'] = np.int(np.around(1e6*(1.0/settings['framerate'])))-doffset_framerate
     exp_time = (settings['exposure'] / 1000)
     
     max_frames = max_collection_seconds * settings['framerate']
