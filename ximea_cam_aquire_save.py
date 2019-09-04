@@ -5,6 +5,8 @@ import os
 import numpy as np
 from ximea import xiapi
 from collections import namedtuple
+import io
+import mmap
 
 frame_data = namedtuple("frame_data", "raw_data nframe tsSec tsUSec")
 
@@ -130,20 +132,36 @@ def save_queue_worker(cam_name, save_queue, save_folder, ims_per_file):
     i = 0
     grbgim = save_queue.get().raw_data
     imlen = len(grbgim)
-    imstr_array = bytearray(ims_per_file * grbgim) #empty byte string the size of image batches
+    #imstr_array = bytearray(ims_per_file * grbgim) #empty byte string the size of image batches
+    m=mmap.mmap(-1, ims_per_file*1064*1544*8)
     while True:
         tsstr_list = []
         fstart=i*ims_per_file
+        
+        bin_filename = os.path.join(save_folder, cam_name, f'frames_{fstart}_{fstart+ims_per_file-1}.bin')
+        #bin_file = io.FileIO(bin_filename, 'wb')
+        #bin_writer = io.BufferedWriter(bin_file, buffer_size=ims_per_file*10000000)
+        f = os.open(bin_filename, os.O_CREAT|os.O_TRUNC|os.O_WRONLY|os.O_SYNC)
+
+        
         for j in range(ims_per_file):
             image = save_queue.get()
-            imstr_array[j*imlen:j*imlen+imlen] = image.raw_data
+            #imstr_array[j*imlen:j*imlen+imlen] = image.raw_data
             tsstr_list.append(f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
+            os.write(f, image.raw_data)
+            #bin_writer.write(image.raw_data)
+            
             #if we're at the end of our batch, write to file
             if(j==ims_per_file-1):
-                bin_file = os.path.join(save_folder, cam_name, f'frames_{fstart}_{fstart+ims_per_file-1}.bin')
-                with open(bin_file, 'wb') as f, open(ts_file_name, 'a+') as ts_file:
-                    f.write(imstr_array)
-                    ts_file.write(''.join(tsstr_list))
+
+#                 bin_writer.write(imstr_array)
+#                 bin_writer.flush()
+    
+                 with open(ts_file_name, 'a+') as ts_file:
+                     #f.write(imstr_array)
+                     ts_file.write(''.join(tsstr_list))
+        os.close(f)
+                      
         i+=1
 
 def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seconds, **settings):
@@ -176,13 +194,13 @@ def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seco
     
     #cyclopean camera captures fast, binocular cameras capture slower
     if(cam_name=='cy'):
-        settings['bandwidth_limit'] = 5688
-        settings['framerate'] = 200
+        #settings['bandwidth_limit'] = 5688
+        settings['framerate'] = 100
         doffset_framerate = 25
     else:
-        settings['bandwidth_limit'] = 3792
+        #settings['bandwidth_limit'] = 3792
         settings['framerate'] = 100
-        doffset_framerate = 10
+        doffset_framerate = 25
     #set exposure in relation to framerate
     settings['exposure'] = np.int(np.around(1e6*(1.0/settings['framerate'])))-doffset_framerate
     exp_time = (settings['exposure'] / 1000)
@@ -198,7 +216,6 @@ def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seco
         sync_queue.put(sync_str)
         
         camera = apply_cam_settings(camera, **settings)
-        
         
         camera.start_acquisition()
         
