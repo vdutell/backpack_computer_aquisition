@@ -10,14 +10,17 @@ import mmap
 
 frame_data = namedtuple("frame_data", "raw_data nframe tsSec tsUSec")
 
-default_settings = {"timing_mode":  'XI_ACQ_TIMING_MODE_FREE_RUN',
+default_settings = {"timing_mode": "XI_ACQ_TIMING_MODE_FREE_RUN", #"XI_ACQ_TIMING_MODE_FRAME_RATE_LIMIT"
                     "img_format": "XI_RAW8",
-                    'framerate': 200,
+                    'framerate': None,
                     'gain': 10,
                     'transport_packing': False,
                     'sensor_bit_depth': "XI_BPP_8",
                     'output_bit_depth': "XI_BPP_8",
-                    'bandwidth_limit': None #4800
+                    'buffer_policy': "XI_BP_SAFE",
+                    'bandwidth_limit': None,
+                    'buffer_queue_size': None, #16                
+                    'acq_buffer_size': None
                    }
 
 def get_sync_string(cam_name, cam_handle):
@@ -45,7 +48,11 @@ def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
                         sensor_bit_depth=None,
                         output_bit_depth=None,
                         bandwidth_limit=None,
-                        report_settings=True
+                        report_settings=True,
+                        buffer_policy=None,
+                        acq_buffer_size=None,
+                        buffer_queue_size = None,
+                        acq_transport_buffer_size=None
                         ):
     """
     Apply settings to the camera
@@ -54,6 +61,11 @@ def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
     #first reset settings
     cam.get_device_reset()
     
+    
+    if framerate is not None:
+        #print(f'Setting framerate to {framerate}'
+        #cam.set_param('framerate_limit', framerate)
+        cam.set_framerate(framerate)
     if exposure is not None:
         #print(f'Setting Exposure to {exposure}')
         cam.set_exposure(exposure)
@@ -82,13 +94,23 @@ def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
             cam.set_imgdataformat('XI_RAW16')
             cam.set_param('output_bit_depth', 'XI_BPP_10')
             cam.enable_output_bit_packing()
+            
     if bandwidth_limit is not None:
         print(f'Limiting bandwidth to {bandwidth_limit}')
+        cam.set_param('limit_bandwidth_mode', "XI_ON")
         cam.set_param('limit_bandwidth', bandwidth_limit)
-        cam.set_limit_bandwidth(bandwidth_limit)
-    if framerate is not None:
-        #print(f'Setting framerate to {framerate}')
-        cam.set_framerate(framerate)
+#         cam.set_limit_bandwidth(bandwidth_limit)
+
+    ### BUFFER STUFF
+    if buffer_policy is not None:
+        cam.set_param('buffer_policy', buffer_policy)
+    if buffer_queue_size is not None:
+        cam.set_param('buffers_queue_size', buffer_queue_size)
+    if acq_buffer_size is not None:
+        cam.set_param('acq_buffer_size', acq_buffer_size)
+#     if acq_transport_buffer_size is not None:
+#         cam.set_param('transport_buffer_size', acq_transport_buffer_size)
+
         
     if(report_settings):
         #exposure time
@@ -116,10 +138,12 @@ def apply_cam_settings(cam, timing_mode=None, exposure=None, framerate=None,
         bw = cam.get_param('limit_bandwidth')
         print(f'Bandwidth limit is set to {bw}')
         # buffer size
-        print(f'Buffer Size is set to {cam.get_acq_buffer_size()}')
+        print(f'Acq Buffer Size is set to {cam.get_acq_buffer_size()}')
+        #print(f'Trans Buffer Size is set to {cam.get_acq_transport_buffer_size()}')
+        print(f'Buffer Policy is {cam.get_buffer_policy()}')
+        print(f'Buffer Queue Size is {cam.get_buffers_queue_size()}')
     return(cam)
         
-      
 def save_queue_worker(cam_name, save_queue, save_folder, ims_per_file):
     
     #setup folder structure and file
@@ -132,37 +156,28 @@ def save_queue_worker(cam_name, save_queue, save_folder, ims_per_file):
     i = 0
     grbgim = save_queue.get().raw_data
     imlen = len(grbgim)
-    #imstr_array = bytearray(ims_per_file * grbgim) #empty byte string the size of image batches
-    m=mmap.mmap(-1, ims_per_file*1064*1544*8)
-    while True:
-        tsstr_list = []
-        fstart=i*ims_per_file
-        
-        bin_filename = os.path.join(save_folder, cam_name, f'frames_{fstart}_{fstart+ims_per_file-1}.bin')
-        #bin_file = io.FileIO(bin_filename, 'wb')
-        #bin_writer = io.BufferedWriter(bin_file, buffer_size=ims_per_file*10000000)
-        f = os.open(bin_filename, os.O_CREAT|os.O_TRUNC|os.O_WRONLY|os.O_SYNC)
-
-        
-        for j in range(ims_per_file):
-            image = save_queue.get()
-            #imstr_array[j*imlen:j*imlen+imlen] = image.raw_data
-            tsstr_list.append(f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
-            os.write(f, image.raw_data)
-            #bin_writer.write(image.raw_data)
-            
-            #if we're at the end of our batch, write to file
-            if(j==ims_per_file-1):
-
-#                 bin_writer.write(imstr_array)
-#                 bin_writer.flush()
     
-                 with open(ts_file_name, 'a+') as ts_file:
-                     #f.write(imstr_array)
-                     ts_file.write(''.join(tsstr_list))
-        os.close(f)
-                      
-        i+=1
+    try:
+        while True:        
+            bin_filename = os.path.join(save_folder,
+                                        cam_name,
+                                        f'frame_{i}.bin')
+            f = os.open(bin_filename, os.O_CREAT|os.O_TRUNC|os.O_WRONLY|os.O_SYNC)
+
+            image = save_queue.get()
+            os.write(f, image.raw_data)
+
+            tsstr_list = f"{i}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n"
+
+            with open(ts_file_name, 'a+') as ts_file:
+                ts_file.write(tsstr_list)
+            os.close(f)
+
+            i+=1
+    
+    except KeyboardInterrupt:
+        print('Detected Keyboard Interrupt. Not saving anymore....')
+              
 
 def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seconds, **settings):
     """
@@ -194,13 +209,14 @@ def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seco
     
     #cyclopean camera captures fast, binocular cameras capture slower
     if(cam_name=='cy'):
-        #settings['bandwidth_limit'] = 5688
-        settings['framerate'] = 100
-        doffset_framerate = 25
+        settings['bandwidth_limit'] = 1200
+        settings['framerate'] = 200
+        doffset_framerate = 20
     else:
-        #settings['bandwidth_limit'] = 3792
+        settings['bandwidth_limit'] = 600
         settings['framerate'] = 100
         doffset_framerate = 25
+        
     #set exposure in relation to framerate
     settings['exposure'] = np.int(np.around(1e6*(1.0/settings['framerate'])))-doffset_framerate
     exp_time = (settings['exposure'] / 1000)
@@ -220,6 +236,7 @@ def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seco
         camera.start_acquisition()
         
         image = xiapi.Image()
+        print(f'Recording for {max_frames} frames total...')
         for _ in range(max_frames):
             camera.get_image(image)
             save_queue.put(frame_data(image.get_image_data_raw(),
@@ -241,28 +258,35 @@ def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seco
         print(f"Camera {cam_name} aquisition finished")
         
 
-def ximea_acquire(save_folder, max_collection_time=5000, ims_per_file=100, **settings):
+def ximea_acquire(save_folder_list, max_collection_time=5000, ims_per_file=100, **settings):
     
     # 3 x save_queues
     # 3 x sync_queues
     
-    cameras = {'od': "XECAS1922000",
-               'os': "XECAS1922001",
-               'cy': "XECAS1930001"}
+    cameras = {'od': "XECAS1922000"}
+               #'os': "XECAS1922001"}
+               #'cy': "XECAS1930001"}
+    
+    save_folders = [save_folder_list[0],
+                    save_folder_list[0],
+                    save_folder_list[1]
+                   ]
     
     save_queues = [mp.Queue() for _ in cameras]
     sync_queues = [mp.Queue() for _ in cameras]
     
-    if not os.path.exists(save_folder):
-        os.makedirs(save_folder)
-    
+    #make folders we'll need
+    for save_folder in save_folder_list: 
+        if not os.path.exists(save_folder):
+            os.makedirs(save_folder)
+
     #start save threads
     save_threads = []
     for i, cam in enumerate(cameras):
         proc = mp.Process(target=save_queue_worker,
                                        args=(cam,
                                              save_queues[i],
-                                             save_folder,
+                                             save_folders[i],
                                              ims_per_file))
         proc.daemon = True
         proc.start()
