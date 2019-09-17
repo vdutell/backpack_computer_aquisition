@@ -1,4 +1,5 @@
 import time
+import pupil.pupil_src as pup_start
 
 def run_pupillabs_aquisition(save_folder, collection_mins,  component_name='PUPIL_CAM'):
     '''
@@ -9,5 +10,6 @@ def run_pupillabs_aquisition(save_folder, collection_mins,  component_name='PUPI
     Returns:
         None
     '''
-    time.sleep(5)
+    time.sleep(collection_mins*60)
+    
     print(f'{component_name} Finished PupilLabs Aquisition.')

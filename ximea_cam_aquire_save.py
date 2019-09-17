@@ -225,7 +225,7 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
                #'cy': "XECAS1930001"}
             
     save_folders = [save_folders_list[0],
-                    save_folders_list[0],
+                    save_folders_list[1], #should be [0] when using 3 camears
                     save_folders_list[1]
                    ]
     
