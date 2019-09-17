@@ -68,6 +68,11 @@ height: 1544
 
 is_output_bit_packing: false
 
+image_data_bit_depth: XI_BPP_8
+output_bit_depth: XI_BPP_8
+sensor_bit_depth: XI_BPP_8
+imgdataformat: XI_RAW8
+
 acq_buffer_size: 600000000
 acq_buffer_size_unit: 1
 buffers_queue_size: 165
@@ -99,8 +104,3 @@ buffer_policy: XI_BP_UNSAFE
 exposure: 4500
 acq_timing_mode: XI_ACQ_TIMING_MODE_FRAME_RATE_LIMIT
 framerate: 200.0
-
-image_data_bit_depth: XI_BPP_8
-output_bit_depth: XI_BPP_8
-sensor_bit_depth: XI_BPP_8
-imgdataformat: XI_RAW8
