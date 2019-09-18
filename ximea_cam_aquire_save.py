@@ -6,6 +6,7 @@ import numpy as np
 from ximea import xiapi
 from collections import namedtuple
 import yaml
+import mmap
 
 frame_data = namedtuple("frame_data", "raw_data nframe tsSec tsUSec")
 
@@ -39,7 +40,7 @@ def get_cam_settings(cam, config_file):
         camera (XimeaCamera instance): camera handle
         config_file (str): string filename of the config file for the camera
     """
-
+    
     # if the config file already exists, pull the property names from that file
     if os.path.exists(config_file):
         with open(config_file, 'r') as f:
@@ -91,7 +92,7 @@ def get_cam_settings(cam, config_file):
                 cam_props[prop] = cam.__getattribute__(f"get_{prop}")()
             except:
                 pass
-    
+
     # take our collected properties and stuff them back into the config
     with open(config_file, 'w') as f:
         yaml.dump(cam_props, f, default_flow_style = False)
@@ -123,7 +124,7 @@ def apply_cam_settings(cam, config_file):
                                          
         else:
             print(f"Camera doesn't have a set_{prop}")
-
+                                    
       
 def save_queue_worker(cam_name, save_queue, save_folder, ims_per_file):
     
@@ -133,27 +134,37 @@ def save_queue_worker(cam_name, save_queue, save_folder, ims_per_file):
     ts_file_name = os.path.join(save_folder, f"timestamps_{cam_name}.tsv")
     with open(ts_file_name, 'w') as timestamp_file:
         timestamp_file.write(f"i\tnframe\ttime\n")
+                            
         
     i = 0
     grbgim = save_queue.get().raw_data
     imlen = len(grbgim)
-    imstr_array = bytearray(ims_per_file * grbgim) #empty byte string the size of image batches
+    #imstr_array = bytearray(ims_per_file * grbgim) #empty byte string the size of image batches
     while True:
         tsstr_list = []
         fstart=i*ims_per_file
+        bin_file_name = os.path.join(save_folder, cam_name, f'frames_{fstart}_{fstart+ims_per_file-1}.bin')
+        f = os.open(bin_file_name, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_SYNC, os.O_DIRECT) 
+        ts_file = open(ts_file_name, 'a+')
         for j in range(ims_per_file):
             image = save_queue.get()
-            imstr_array[j*imlen:j*imlen+imlen] = image.raw_data
-            tsstr_list.append(f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
+            os.write(f,image.raw_data)  
+            ts_file.write(f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
+            #imstr_array[j*imlen:j*imlen+imlen] = image.raw_data
+            #tsstr_list.append(f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
             #if we're at the end of our batch, write to file
-            if(j==ims_per_file-1):
-                bin_file = os.path.join(save_folder, cam_name, f'frames_{fstart}_{fstart+ims_per_file-1}.bin')
-                with open(bin_file, 'wb') as f, open(ts_file_name, 'a+') as ts_file:
-                    f.write(imstr_array)
-                    ts_file.write(''.join(tsstr_list))
-        i+=1
+#             if(j==ims_per_file-1):
 
-def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seconds, component_name='SCENE_CAM',**settings):
+#                 with  as f:
+                                     
+#                     f.write(imstr_array)
+#                 with open(ts_file_name, 'a+') as ts_file:        
+#                     ts_file.write(''.join(tsstr_list))
+        i+=1
+    f.close()
+    ts_file.close()
+
+def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seconds, component_name='SCENE_CAM'):
     """
     Acquire frames from a single camera.
     
@@ -215,7 +226,7 @@ def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seco
         print(f"{component_name} Camera {cam_name} aquisition finished")
         
 
-def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, component_name='SCENE_CAM', **settings):
+def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, component_name='SCENE_CAM'):
     
     # 3 x save_queues
     # 3 x sync_queues
@@ -256,8 +267,7 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
                                 cam_name,
                                 sync_queues[i],
                                 save_queues[i],
-                                max_collection_mins*60),
-                          kwargs=settings)
+                                max_collection_mins*60))
         acquisition_threads.append(proc)
         proc.daemon = True
     
