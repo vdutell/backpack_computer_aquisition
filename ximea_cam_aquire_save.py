@@ -126,7 +126,7 @@ def apply_cam_settings(cam, config_file):
             print(f"Camera doesn't have a set_{prop}")
                                     
       
-def save_queue_worker(cam_name, save_queue, save_folder, ims_per_file):
+def save_queue_worker(cam_name, save_pipe_out, save_folder, ims_per_file):
     
     #setup folder structure and file
     if not os.path.exists(os.path.join(save_folder, cam_name)):
@@ -137,7 +137,7 @@ def save_queue_worker(cam_name, save_queue, save_folder, ims_per_file):
                             
         
     i = 0
-    grbgim = save_queue.get().raw_data
+    grbgim = save_pipe_out.recv().raw_data
     imlen = len(grbgim)
     #imstr_array = bytearray(ims_per_file * grbgim) #empty byte string the size of image batches
     while True:
@@ -147,7 +147,7 @@ def save_queue_worker(cam_name, save_queue, save_folder, ims_per_file):
         f = os.open(bin_file_name, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_SYNC, os.O_DIRECT) 
         ts_file = open(ts_file_name, 'a+')
         for j in range(ims_per_file):
-            image = save_queue.get()
+            image = save_pipe_out.recv()
             os.write(f,image.raw_data)  
             ts_file.write(f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
             #imstr_array[j*imlen:j*imlen+imlen] = image.raw_data
@@ -164,7 +164,9 @@ def save_queue_worker(cam_name, save_queue, save_folder, ims_per_file):
     f.close()
     ts_file.close()
 
-def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seconds, component_name='SCENE_CAM'):
+#def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seconds, component_name='SCENE_CAM'):
+def acquire_camera(cam_id, cam_name, sync_pipe_in, save_pipe_in, max_collection_seconds, component_name='SCENE_CAM'):
+
     """
     Acquire frames from a single camera.
     
@@ -200,23 +202,24 @@ def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seco
         
         print(f'{component_name} Recording Timestamp Syncronization Pre...')
         sync_str = get_sync_string(cam_name + "_pre", camera)
-        sync_queue.put(sync_str)
+        sync_pipe_in.send(sync_str)
         
         camera.start_acquisition()
         
         image = xiapi.Image()
         for _ in range(max_frames):
             camera.get_image(image)
-            save_queue.put(frame_data(image.get_image_data_raw(),
+            d = frame_data(image.get_image_data_raw(),
                                       image.nframe,
                                       image.tsSec,
-                                      image.tsUSec))
+                                      image.tsUSec)
+            save_pipe_in.send(d)
         print(f'{component_name} Reached {max_frames} frames collected. Exiting.')
         
     except KeyboardInterrupt:
         print(f'{component_name} Detected Keyboard Interrupt. Stopping Acquisition')
         sync_str = get_sync_string(cam_name + "_post", camera)
-        sync_queue.put(sync_str)
+        sync_pipe_in.send(sync_str)
         
     finally:
         print(f"{component_name} Camera {cam_name} Cleanup...")
@@ -240,8 +243,13 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
                     save_folders_list[1]
                    ]
     
-    save_queues = [mp.Queue() for _ in cameras]
-    sync_queues = [mp.Queue() for _ in cameras]
+    
+    save_pipes = [mp.Pipe() for _ in cameras]
+    sync_pipes =  [mp.Pipe() for _ in cameras] 
+    #sync_pipe_ins, sync_pipe_outs = *sync_pipes
+    #save_pipe_ins, save_pipe_outs = *save_pipes
+    #save_queues = [mp.Queue() for _ in cameras]
+    #sync_queues = [mp.Queue() for _ in cameras]
     
     for save_folder in save_folders_list: 
         if not os.path.exists(save_folder):
@@ -252,9 +260,16 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     for i, cam in enumerate(cameras):
         proc = mp.Process(target=save_queue_worker,
                                        args=(cam,
-                                             save_queues[i],
+                                             save_pipes[i][1],
                                              save_folders[i],
                                              ims_per_file))
+        #         proc = mp.Process(target=save_queue_worker,
+#                                        args=(cam,
+#                                              save_queues[i],
+#                                              save_folders[i],
+#                                              ims_per_file))
+                                     
+                                     
         proc.daemon = True
         proc.start()
         save_threads.append(proc)
@@ -265,9 +280,16 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
         proc = mp.Process(target=acquire_camera,
                           args=(cam_sn,
                                 cam_name,
-                                sync_queues[i],
-                                save_queues[i],
+                                sync_pipes[i][0],
+                                save_pipes[i][0],
                                 max_collection_mins*60))
+        #         proc = mp.Process(target=acquire_camera,
+#                           args=(cam_sn,
+#                                 cam_name,
+#                                 sync_queues[i],
+#                                 save_queues[i],
+#                                 max_collection_mins*60))
+                                     
         acquisition_threads.append(proc)
         proc.daemon = True
     
@@ -280,7 +302,14 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
         proc.join()
     
     print(f"{component_name} Finished Aquiring. Waiting for Save Queues to Empty...")
-    for q in save_queues:
-        while not q.empty():
-            time.sleep(1)
+#     for q in save_queues:
+#         while not q.empty():
+#             time.sleep(1)
+                                     
+    
+    time.sleep(max_collection_mins*60*10)
+    #for q in save_pipe_outs:
+    #    while not q.empty():
+    #        time.sleep(1)
+                                     
     print("All Done!")
