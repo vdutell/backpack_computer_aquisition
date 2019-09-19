@@ -5,7 +5,7 @@ from multiprocessing import Process
 import re
 import matplotlib.pyplot as plt
 
-def convert_bin_png(filename, save_folder, im_shape=(1544,2064), img_format='XI_RAW8'):
+def convert_bin_png(filename, save_folder_list, im_shape=(1544,2064), img_format='XI_RAW8'):
     '''
     Take a file saved in .bin format from a ximea camera, and convert it to a png image.
     Parameters:
@@ -54,6 +54,32 @@ def convert_bin_png(filename, save_folder, im_shape=(1544,2064), img_format='XI_
     print('*',end='')
     
     return()
+
+
+def bin_to_im(binfile, dims, nframe):
+    '''
+    convert a single image from 8-bit raw bytes to png image.
+    Input:
+        binfile (str): path to binary file
+        dims (2ple int): What are the dimensions of the iamge?
+        nframe (int): Which frame number do we want within image?
+        '''
+    a = []
+    # for uint8
+    nbytes = np.prod(dims)
+    startbyte = nframe*nbytes
+    with open(binfile, 'rb') as fn:
+        fn.seek(startbyte)
+        bs = fn.read(1)
+        for i in range(nbytes):
+            bs = fn.read(1)
+            bs = int.from_bytes(bs,'big')
+            a.append(bs)
+            
+    a = np.array(a)
+    im = a.reshape(dims)
+    imc = cv2.cvtColor(np.uint16(im), cv2.COLOR_BayerGR2RGB)
+    return(imc)
 
 def convert_folder(read_folder, write_folder):
     '''
