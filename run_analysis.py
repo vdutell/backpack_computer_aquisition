@@ -56,7 +56,7 @@ def convert_bin_png(filename, save_folder_list, im_shape=(1544,2064), img_format
     return()
 
 
-def bin_to_im(binfile, dims, nframe):
+def bin_to_im(binfile, nframe, dims=(1544,2064)):
     '''
     convert a single image from 8-bit raw bytes to png image.
     Input:
@@ -78,7 +78,8 @@ def bin_to_im(binfile, dims, nframe):
             
     a = np.array(a)
     im = a.reshape(dims)
-    imc = cv2.cvtColor(np.uint16(im), cv2.COLOR_BayerGR2RGB)
+    imc = cv2.cvtColor(np.uint8(im), cv2.COLOR_BayerGR2RGB)
+    
     return(imc)
 
 def convert_folder(read_folder, write_folder):
