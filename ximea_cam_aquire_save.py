@@ -1,7 +1,7 @@
 import copy
 import multiprocessing as mp
 import time
-import os
+import os as os
 import numpy as np
 from ximea import xiapi
 from collections import namedtuple
@@ -132,37 +132,45 @@ def save_queue_worker(cam_name, save_pipe_out, save_folder, ims_per_file):
     if not os.path.exists(os.path.join(save_folder, cam_name)):
         os.makedirs(os.path.join(save_folder, cam_name))
     ts_file_name = os.path.join(save_folder, f"timestamps_{cam_name}.tsv")
-    with open(ts_file_name, 'w') as timestamp_file:
-        timestamp_file.write(f"i\tnframe\ttime\n")
-                            
-        
+                                     
+    #make a newtimestamp file
+    with open(ts_file_name, 'w') as ts_file:
+        ts_file.write(f"i\tnframe\ttime\n")
+    #open it for appending
+    ts_file = open(ts_file_name, 'a+')
+    #ts_file = os.open(ts_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_APPEND | os.O_SYNC | os.O_DIRECT)      
     i = 0
     grbgim = save_pipe_out.recv().raw_data
     imlen = len(grbgim)
     #imstr_array = bytearray(ims_per_file * grbgim) #empty byte string the size of image batches
-    while True:
-        tsstr_list = []
-        fstart=i*ims_per_file
-        bin_file_name = os.path.join(save_folder, cam_name, f'frames_{fstart}_{fstart+ims_per_file-1}.bin')
-        f = os.open(bin_file_name, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_SYNC, os.O_DIRECT) 
-        ts_file = open(ts_file_name, 'a+')
-        for j in range(ims_per_file):
-            image = save_pipe_out.recv()
-            os.write(f,image.raw_data)  
-            ts_file.write(f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
-            #imstr_array[j*imlen:j*imlen+imlen] = image.raw_data
-            #tsstr_list.append(f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
-            #if we're at the end of our batch, write to file
-#             if(j==ims_per_file-1):
+    try:
+        if(ims_per_file == 1):
+            while True:
+                bin_file_name = os.path.join(save_folder, cam_name, f'frame_{i}.bin')
+                f = os.open(bin_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_TRUNC | os.O_SYNC | os.O_DIRECT)
+                image = save_pipe_out.recv()
+                os.write(f, image.raw_data)
+                ts_file.write( f"{i}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
+                i+=1
+        else:
+            while True:
+                fstart=i*ims_per_file
+                bin_file_name = os.path.join(save_folder, cam_name, f'frames_{fstart}_{fstart+ims_per_file-1}.bin')
+                f = os.open(bin_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_TRUNC | os.O_SYNC | os.O_DIRECT)
+                for j in range(ims_per_file):
+                    image = save_pipe_out.recv()
+                    os.write(f, image.raw_data)
+                    ts_file.write( f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
+                i+=1
 
-#                 with  as f:
+        ##TODO: Safely handle a keyboard interrupt by continuing to save data until the pipes are empty.                 
+#     except KeyboardInterrupt:
+#         print(f'{component_name} Detected Keyboard Interrupt. Finishing Saving Before Stopping. Send another Interrupt to stop saving')
+ 
+    finally:
+        os.close(f)
+        os.close(ts_file)
                                      
-#                     f.write(imstr_array)
-#                 with open(ts_file_name, 'a+') as ts_file:        
-#                     ts_file.write(''.join(tsstr_list))
-        i+=1
-    f.close()
-    ts_file.close()
 
 #def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seconds, component_name='SCENE_CAM'):
 def acquire_camera(cam_id, cam_name, sync_pipe_in, save_pipe_in, max_collection_seconds, component_name='SCENE_CAM'):
@@ -307,9 +315,11 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
 #             time.sleep(1)
                                      
     
-    time.sleep(max_collection_mins*60*10)
-    #for q in save_pipe_outs:
-    #    while not q.empty():
-    #        time.sleep(1)
+    #time.sleep(max_collection_mins*60*10)
+    for q in {save_pipes[0][1], save_pipes[1][1]}:
+        while q.poll():
+            time.sleep(5)
+    print(f"{component_name} Pipes are Empty.")
+        
                                      
-    print("All Done!")
+    print(f"{component_name} All Finished - Ending Process Now.")
