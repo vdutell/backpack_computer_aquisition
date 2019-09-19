@@ -70,11 +70,11 @@ is_output_bit_packing: false
 
 acq_buffer_size: 600000000
 acq_buffer_size_unit: 1
-buffers_queue_size: 165
+buffers_queue_size: 512
 counter_selector: XI_CNT_SEL_TRANSPORT_SKIPPED_FRAMES
 sharpness: 0.0
 
-gain: 1
+gain: 10
 gain_selector: XI_GAIN_SELECTOR_ALL
 
 
@@ -95,8 +95,8 @@ is_recent_frame: false
 is_auto_bandwidth_calculation: false
 limit_bandwidth: 10000
 limit_bandwidth_mode: XI_OFF
-buffer_policy: XI_BP_UNSAFE
-exposure: 4500
+buffer_policy: XI_BP_SAFE
+exposure: 4850
 acq_timing_mode: XI_ACQ_TIMING_MODE_FRAME_RATE_LIMIT
 framerate: 200.0
 
