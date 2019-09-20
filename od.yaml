@@ -70,7 +70,7 @@ is_output_bit_packing: false
 
 acq_buffer_size: 600000000
 acq_buffer_size_unit: 1
-buffers_queue_size: 512
+buffers_queue_size: 185
 counter_selector: XI_CNT_SEL_TRANSPORT_SKIPPED_FRAMES
 sharpness: 0.0
 

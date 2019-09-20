@@ -44,7 +44,7 @@ def get_cam_settings(cam, config_file):
     # if the config file already exists, pull the property names from that file
     if os.path.exists(config_file):
         with open(config_file, 'r') as f:
-            settings = yaml.load(f)
+            settings = yaml.load(f, Loader=yaml.UnsafeLoader)
         prop_names = list(settings.keys())
     
     # otherwise we have to grab them manually from the camera
@@ -107,7 +107,7 @@ def apply_cam_settings(cam, config_file):
         config_file (str): string filename of the config file for the camera
     """
     with open(config_file, 'r') as f:
-        cam_props = yaml.load(f)
+        cam_props = yaml.load(f, Loader=yaml.UnsafeLoader)
         
     for prop, value in cam_props.items():
         if f"set_{prop}" in dir(cam):
@@ -242,8 +242,8 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     # 3 x save_queues
     # 3 x sync_queues
     
-    cameras = {'od': "XECAS1922000",
-               'os': "XECAS1922001"}
+    cameras = {'od': "XECAS1922000"}
+               #'os': "XECAS1922001"}
                #'cy': "XECAS1930001"}
             
     save_folders = [save_folders_list[0],
@@ -316,8 +316,8 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
                                      
     
     #time.sleep(max_collection_mins*60*10)
-    for q in {save_pipes[0][1], save_pipes[1][1]}:
-        while q.poll():
+    for q in save_pipes:
+        while q[1].poll():
             time.sleep(5)
     print(f"{component_name} Pipes are Empty.")
         
