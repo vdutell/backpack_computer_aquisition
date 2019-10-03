@@ -30,8 +30,28 @@ def get_sync_string(cam_name, cam_handle):
     t_wall_2 = time.monotonic()
     t_wall = np.mean((t_wall_1, t_wall_2)) #take middle of two wall times
     dt = t_cam - t_wall
-    sync_string = f'{cam_name}\t{t_wall}\t{t_cam}\t{dt}'
+    sync_string = f'{cam_name}\t{t_wall}\t{t_cam}\t{dt}\n'
     return(sync_string)
+
+def write_sync_queue(sync_queue, cam_name, save_folder):
+    '''
+    Get() everything from the sync string queue and write it to disk.
+    Params:
+        sync_queue (Multiprocessing Queue): Queue of sync strings to write to disk
+        cam_name (str) name of camera - used for filename
+        save_folder (str) directory to save sync string
+    Returns:
+        None
+    '''
+    sync_file_name = os.path.join(save_folder, f"timestamp_camsync_{cam_name}.tsv")
+    with open(sync_file_name, 'w') as sync_file:
+        sync_file.write(f"i\tcam_name\t_wall\tt_cam\tdt\n")
+    #open it for appending
+    sync_file = open(sync_file_name, 'a+')
+    while not sync_queue.empty():
+        sync_string = sync_queue.get()
+        sync_file.write(sync_string)
+    return()
 
 def get_cam_settings(cam, config_file):
     """
@@ -147,7 +167,6 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
     grbgim = grbgim.raw_data
     #imstr_array = bytearray(ims_per_file * grbgim) #empty byte string the size of image batches
     try:
-        print('beginning save loop')
         if(ims_per_file == 1):
             while True:
                 bin_file_name = os.path.join(save_folder, cam_name, f'frame_{i}.bin')
@@ -221,7 +240,6 @@ def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collectio
         
         print(f'{component_name} Recording Timestamp Syncronization Pre...')
         sync_str = get_sync_string(cam_name + "_pre", camera)
-        #sync_pipe_in.send(sync_str)
         sync_queue_in.put(sync_str)
 
         camera.start_acquisition()
@@ -234,22 +252,20 @@ def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collectio
                                 image.tsSec,
                                image.tsUSec)
             save_queue_in.put(d)
-        print(f'{component_name} Reached {max_frames} frames collected. Exiting.')
-        save_queue_in.close() #close the connection 
-
+            
+        print(f'{component_name} Reached {max_frames} frames collected')
+        sync_str = get_sync_string(cam_name + "_post", camera)
+        sync_queue_in.put(sync_str)
         
     except KeyboardInterrupt:
         print(f'{component_name} Detected Keyboard Interrupt. Stopping Acquisition')
         sync_str = get_sync_string(cam_name + "_post", camera)
-        sync_queue_in.send(sync_str)
-        #sync_queue_in.close()
-        #save_queue_in.close()
+        sync_queue_in.put(sync_str)
         
     finally:
         print(f"{component_name} Camera {cam_name} Cleanup...")
         camera.stop_acquisition()
         camera.close_device()
-    
         print(f"{component_name} Camera {cam_name} aquisition finished")
         
 
@@ -267,7 +283,7 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
                     save_folders_list[1]
                    ]
     
-    save_queues = [mp.JoinableQueue() for _ in cameras]
+    save_queues = [mp.Queue() for _ in cameras]
     sync_queues = [mp.Queue() for _ in cameras]
     
     for save_folder in save_folders_list: 
@@ -310,18 +326,25 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
         time.sleep(gc_delay*2)
         #q_size = [q.qsize() for q in save_queues]
         #print(f'Queue size is {q_size}')
-    
+        
+    print(f"{component_name} Finished Aquiring...")
     for proc in acquisition_threads:
         proc.join()
     
-    print(f"{component_name} Finished Aquiring. Waiting for Save Queues to Empty...")
+    
+    print(f"{component_name} Saving Timestamp Sync Information...")
+    for i, (cam_name, cam_sn) in enumerate(cameras.items()):
+        write_sync_queue(sync_queues[i], cam_name, save_folders[i])
+    
+    print(f"{component_name} Waiting for Save Queues to Empty...")
     for q in save_queues:
         while not q.empty():
             time.sleep(1)
-            q_size = [q.qsize() for q in save_queues]
-            print(f'Queue size is {q_size}')
+            #q_size = [q.qsize() for q in save_queues]
+            #print(f'Queue size is {q_size}')
                                      
     print(f"{component_name} Pipes are Empty.")
+    
         
                                      
     print(f"{component_name} All Finished - Ending Process Now.")
