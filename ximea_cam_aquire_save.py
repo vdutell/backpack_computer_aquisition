@@ -167,7 +167,7 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
                     image = save_queue_out.get()
                     os.write(f, image.raw_data)
                     ts_file.write( f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
-                    save_queue_out.task_done()
+                    #save_queue_out.task_done()
                 i+=1
     except:
         print('Exiting Save Thread')
@@ -242,8 +242,8 @@ def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collectio
         print(f'{component_name} Detected Keyboard Interrupt. Stopping Acquisition')
         sync_str = get_sync_string(cam_name + "_post", camera)
         sync_queue_in.send(sync_str)
-        sync_queue_in.close()
-        save_queue_in.close()
+        #sync_queue_in.close()
+        #save_queue_in.close()
         
     finally:
         print(f"{component_name} Camera {cam_name} Cleanup...")
@@ -268,7 +268,7 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
                    ]
     
     save_queues = [mp.JoinableQueue() for _ in cameras]
-    sync_queues = [mp.JoinableQueue() for _ in cameras]
+    sync_queues = [mp.Queue() for _ in cameras]
     
     for save_folder in save_folders_list: 
         if not os.path.exists(save_folder):
@@ -308,8 +308,8 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     gc_delay = 2
     for i in range(int(max_collection_mins*60//gc_delay)):
         time.sleep(gc_delay*2)
-        q_size = [q.qsize() for q in save_queues]
-        print(f'Queue size is {q_size}')
+        #q_size = [q.qsize() for q in save_queues]
+        #print(f'Queue size is {q_size}')
     
     for proc in acquisition_threads:
         proc.join()
