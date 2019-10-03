@@ -7,6 +7,11 @@ from ximea import xiapi
 from collections import namedtuple
 import yaml
 import mmap
+import copy
+import sys
+import gc
+
+import ctypes
 
 frame_data = namedtuple("frame_data", "raw_data nframe tsSec tsUSec")
 
@@ -124,15 +129,13 @@ def apply_cam_settings(cam, config_file):
                                          
         else:
             print(f"Camera doesn't have a set_{prop}")
-                                    
-      
-def save_queue_worker(cam_name, save_pipe_out, save_folder, ims_per_file):
+                
+def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
     
     #setup folder structure and file
     if not os.path.exists(os.path.join(save_folder, cam_name)):
         os.makedirs(os.path.join(save_folder, cam_name))
     ts_file_name = os.path.join(save_folder, f"timestamps_{cam_name}.tsv")
-                                     
     #make a newtimestamp file
     with open(ts_file_name, 'w') as ts_file:
         ts_file.write(f"i\tnframe\ttime\n")
@@ -140,17 +143,21 @@ def save_queue_worker(cam_name, save_pipe_out, save_folder, ims_per_file):
     ts_file = open(ts_file_name, 'a+')
     #ts_file = os.open(ts_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_APPEND | os.O_SYNC | os.O_DIRECT)      
     i = 0
-    grbgim = save_pipe_out.recv().raw_data
-    imlen = len(grbgim)
+    grbgim = save_queue_out.get()
+    #grbgim = save_pipe_out.recv()
+    grbgim = grbgim.raw_data
     #imstr_array = bytearray(ims_per_file * grbgim) #empty byte string the size of image batches
     try:
         if(ims_per_file == 1):
             while True:
                 bin_file_name = os.path.join(save_folder, cam_name, f'frame_{i}.bin')
                 f = os.open(bin_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_TRUNC | os.O_SYNC | os.O_DIRECT)
-                image = save_pipe_out.recv()
+                image = save_queue_out.get()
+                #image = save_pipe_out.recv()
                 os.write(f, image.raw_data)
                 ts_file.write( f"{i}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
+                os.close(f)
+                del(image)
                 i+=1
         else:
             while True:
@@ -158,23 +165,31 @@ def save_queue_worker(cam_name, save_pipe_out, save_folder, ims_per_file):
                 bin_file_name = os.path.join(save_folder, cam_name, f'frames_{fstart}_{fstart+ims_per_file-1}.bin')
                 f = os.open(bin_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_TRUNC | os.O_SYNC | os.O_DIRECT)
                 for j in range(ims_per_file):
-                    image = save_pipe_out.recv()
+                    #image = save_pipe_out.recv()
+                    image = save_queue_out.get()
                     os.write(f, image.raw_data)
                     ts_file.write( f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
+                    del(image)
+                os.close(f)
+                gc.collect()
                 i+=1
+    except:
+        print('Exiting Save Thread')
 
-        ##TODO: Safely handle a keyboard interrupt by continuing to save data until the pipes are empty.                 
+##TODO: Safely handle a keyboard interrupt by continuing to save data until the pipes are empty
 #     except KeyboardInterrupt:
 #         print(f'{component_name} Detected Keyboard Interrupt. Finishing Saving Before Stopping. Send another Interrupt to stop saving')
- 
-    finally:
-        os.close(f)
-        os.close(ts_file)
-                                     
 
-#def acquire_camera(cam_id, cam_name, sync_queue, save_queue, max_collection_seconds, component_name='SCENE_CAM'):
-def acquire_camera(cam_id, cam_name, sync_pipe_in, save_pipe_in, max_collection_seconds, component_name='SCENE_CAM'):
+#     except:
+#         print('There was an Error in the save Thread!')
+#     finally:
+#         os.close(f)
+#         os.close(ts_file)
 
+
+def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collection_seconds,
+                   component_name='SCENE_CAM'):
+    
     """
     Acquire frames from a single camera.
     
@@ -210,24 +225,43 @@ def acquire_camera(cam_id, cam_name, sync_pipe_in, save_pipe_in, max_collection_
         
         print(f'{component_name} Recording Timestamp Syncronization Pre...')
         sync_str = get_sync_string(cam_name + "_pre", camera)
-        sync_pipe_in.send(sync_str)
-        
+        #sync_pipe_in.send(sync_str)
+        sync_queue_in.put(sync_str)
+
         camera.start_acquisition()
-        
         image = xiapi.Image()
-        for _ in range(max_frames):
+        
+        for i in range(max_frames):
             camera.get_image(image)
-            d = frame_data(image.get_image_data_raw(),
-                                      image.nframe,
-                                      image.tsSec,
-                                      image.tsUSec)
-            save_pipe_in.send(d)
+            #print(data.size)
+            #data = image.bp, bp_size
+            #data = copy.deepcopy(image.bp)
+            #data = (ctypes.c_uint*image.bp_size).from_address(image.bp)
+            data = image.get_image_data_raw()
+            #data = ctypes.create_string_buffer(image.bp, image.bp_size)
+            #data = ctypes.cast(image.bp, ctypes.POINTER(ctypes.c_uint))
+            d = frame_data(data,image.nframe,
+                                image.tsSec,
+                               image.tsUSec)
+            #save_pipe_in.send(copy.deepcopy(d))
+            save_queue_in.put(d)
+            #del(data, d)
+            #save_pipe_in.send(copy.deepcopy(d))
         print(f'{component_name} Reached {max_frames} frames collected. Exiting.')
+        #save_pipe_in.close() #close the connection 
+        save_queue_in.close() #close the connection 
+
         
     except KeyboardInterrupt:
         print(f'{component_name} Detected Keyboard Interrupt. Stopping Acquisition')
         sync_str = get_sync_string(cam_name + "_post", camera)
-        sync_pipe_in.send(sync_str)
+        sync_queue_in.send(sync_str)
+        sync_queue_in.close()
+        save_queue_in.close()
+#         save_pipe_in.close() #close the connection#         
+#         sync_pipe_in.send(sync_str)
+#         sync_pipe_in.close()
+#         save_pipe_in.close() #close the connection
         
     finally:
         print(f"{component_name} Camera {cam_name} Cleanup...")
@@ -237,7 +271,7 @@ def acquire_camera(cam_id, cam_name, sync_pipe_in, save_pipe_in, max_collection_
         print(f"{component_name} Camera {cam_name} aquisition finished")
         
 
-def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, component_name='SCENE_CAM'):
+def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, component_name='SCENE_CAM', memsize=10):
     
     # 3 x save_queues
     # 3 x sync_queues
@@ -247,17 +281,21 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
                #'cy': "XECAS1930001"}
             
     save_folders = [save_folders_list[0],
-                    save_folders_list[1], #should be [0] when using 3 camears
+                    save_folders_list[1], # this line should be [0] when using 3 camears
                     save_folders_list[1]
                    ]
     
+    #calculate queue size limit
+    #limit our queue size so that we dont overflow memory.
+    imsize_bits = 1544*2064
+    queue_limt = int(memsize*1e9 / imsize_bits)
     
-    save_pipes = [mp.Pipe() for _ in cameras]
-    sync_pipes =  [mp.Pipe() for _ in cameras] 
+#     save_pipes = [mp.Pipe(duplex=False) for _ in cameras]
+#     sync_pipes =  [mp.Pipe(duplex=False) for _ in cameras] 
     #sync_pipe_ins, sync_pipe_outs = *sync_pipes
     #save_pipe_ins, save_pipe_outs = *save_pipes
-    #save_queues = [mp.Queue() for _ in cameras]
-    #sync_queues = [mp.Queue() for _ in cameras]
+    save_queues = [mp.Queue(queue_limt) for _ in cameras]
+    sync_queues = [mp.Queue() for _ in cameras]
     
     for save_folder in save_folders_list: 
         if not os.path.exists(save_folder):
@@ -266,16 +304,15 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     #start save threads
     save_threads = []
     for i, cam in enumerate(cameras):
-        proc = mp.Process(target=save_queue_worker,
-                                       args=(cam,
-                                             save_pipes[i][1],
-                                             save_folders[i],
-                                             ims_per_file))
-        #         proc = mp.Process(target=save_queue_worker,
+#         proc = mp.Process(target=save_queue_worker,
 #                                        args=(cam,
-#                                              save_queues[i],
+#                                              save_pipes[i][0],
 #                                              save_folders[i],
 #                                              ims_per_file))
+        proc = mp.Process(target=save_queue_worker, args=(cam,
+                                             save_queues[i],
+                                             save_folders[i],
+                                             ims_per_file))
                                      
                                      
         proc.daemon = True
@@ -285,40 +322,53 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     #start aquisition threads
     acquisition_threads = []
     for i, (cam_name, cam_sn) in enumerate(cameras.items()):
+#         proc = mp.Process(target=acquire_camera,
+#                           args=(cam_sn,
+#                                 cam_name,
+#                                 sync_pipes[i][1],
+#                                 save_pipes[i][1],
+#                                 max_collection_mins*60))
         proc = mp.Process(target=acquire_camera,
                           args=(cam_sn,
                                 cam_name,
-                                sync_pipes[i][0],
-                                save_pipes[i][0],
+                                sync_queues[i],
+                                save_queues[i],
                                 max_collection_mins*60))
-        #         proc = mp.Process(target=acquire_camera,
-#                           args=(cam_sn,
-#                                 cam_name,
-#                                 sync_queues[i],
-#                                 save_queues[i],
-#                                 max_collection_mins*60))
                                      
-        acquisition_threads.append(proc)
         proc.daemon = True
-    
+        acquisition_threads.append(proc)
+
+        
     print(f"{component_name} Starting acquisition threads...")
     for proc in acquisition_threads:
         proc.start()
 
     print(f"{component_name} Aquiring Until Finished...")
+    #every 10 seconds, garbage collect (for queue)
+    gc_delay = 2
+    for i in range(max_collection_mins*60//gc_delay):
+        time.sleep(gc_delay)
+        gc.collect()
+        q_size = [q.qsize() for q in save_queues]
+        print(f'garbage collected! Queue size is {q_size}')
+    
     for proc in acquisition_threads:
         proc.join()
     
     print(f"{component_name} Finished Aquiring. Waiting for Save Queues to Empty...")
-#     for q in save_queues:
-#         while not q.empty():
-#             time.sleep(1)
+    for q in save_queues:
+        while not q.empty():
+            time.sleep(1)
+            gc.collect()
+            q_size = [q.qsize() for q in save_queues]
+            print(f'garbage collected! Queue size is {q_size}')
                                      
     
-    #time.sleep(max_collection_mins*60*10)
-    for q in save_pipes:
-        while q[1].poll():
-            time.sleep(5)
+#     #sleep while we wait for collection, then wait until all pipes are empty
+#     time.sleep(max_collection_mins*60)
+#     for q in save_pipes:
+#         while q[0].poll():
+#             time.sleep(2)
     print(f"{component_name} Pipes are Empty.")
         
                                      
