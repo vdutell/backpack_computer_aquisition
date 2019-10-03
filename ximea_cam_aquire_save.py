@@ -151,13 +151,13 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
         if(ims_per_file == 1):
             while True:
                 bin_file_name = os.path.join(save_folder, cam_name, f'frame_{i}.bin')
-                f = os.open(bin_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_TRUNC | os.O_SYNC | os.O_DIRECT)
-                image = save_queue_out.get()
+                #f = os.open(bin_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_TRUNC | os.O_SYNC | os.O_DIRECT)
+                #image = save_queue_out.get()
                 #image = save_pipe_out.recv()
-                os.write(f, image.raw_data)
+                #os.write(f, image.raw_data)
                 ts_file.write( f"{i}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
-                os.close(f)
-                del(image)
+                #os.close(f)
+                #del(image)
                 i+=1
         else:
             while True:
@@ -170,6 +170,7 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
                     os.write(f, image.raw_data)
                     ts_file.write( f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
                     del(image)
+                    save_queue_out.task_done()
                 os.close(f)
                 gc.collect()
                 i+=1
@@ -288,14 +289,14 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     #calculate queue size limit
     #limit our queue size so that we dont overflow memory.
     imsize_bits = 1544*2064
-    queue_limt = int(memsize*1e9 / imsize_bits)
+    queue_limt = int(memsize*1e9 // imsize_bits)
     
 #     save_pipes = [mp.Pipe(duplex=False) for _ in cameras]
 #     sync_pipes =  [mp.Pipe(duplex=False) for _ in cameras] 
     #sync_pipe_ins, sync_pipe_outs = *sync_pipes
     #save_pipe_ins, save_pipe_outs = *save_pipes
-    save_queues = [mp.Queue(queue_limt) for _ in cameras]
-    sync_queues = [mp.Queue() for _ in cameras]
+    save_queues = [mp.JoinableQueue() for _ in cameras]
+    sync_queues = [mp.JoinableQueue() for _ in cameras]
     
     for save_folder in save_folders_list: 
         if not os.path.exists(save_folder):
@@ -346,8 +347,8 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     print(f"{component_name} Aquiring Until Finished...")
     #every 10 seconds, garbage collect (for queue)
     gc_delay = 2
-    for i in range(max_collection_mins*60//gc_delay):
-        time.sleep(gc_delay)
+    for i in range(int(max_collection_mins*60//gc_delay)):
+        time.sleep(gc_delay*2)
         gc.collect()
         q_size = [q.qsize() for q in save_queues]
         print(f'garbage collected! Queue size is {q_size}')
