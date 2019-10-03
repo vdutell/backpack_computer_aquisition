@@ -131,7 +131,7 @@ def apply_cam_settings(cam, config_file):
             print(f"Camera doesn't have a set_{prop}")
                 
 def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
-    
+    print('starting save queue thread')
     #setup folder structure and file
     if not os.path.exists(os.path.join(save_folder, cam_name)):
         os.makedirs(os.path.join(save_folder, cam_name))
@@ -148,6 +148,7 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
     grbgim = grbgim.raw_data
     #imstr_array = bytearray(ims_per_file * grbgim) #empty byte string the size of image batches
     try:
+        print('beginning save loop')
         if(ims_per_file == 1):
             while True:
                 bin_file_name = os.path.join(save_folder, cam_name, f'frame_{i}.bin')
@@ -169,10 +170,7 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
                     image = save_queue_out.get()
                     os.write(f, image.raw_data)
                     ts_file.write( f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
-                    del(image)
                     save_queue_out.task_done()
-                os.close(f)
-                gc.collect()
                 i+=1
     except:
         print('Exiting Save Thread')
