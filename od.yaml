@@ -74,7 +74,7 @@ buffers_queue_size: 185
 counter_selector: XI_CNT_SEL_TRANSPORT_SKIPPED_FRAMES
 sharpness: 0.0
 
-gain: 30
+gain: 20
 gain_selector: XI_GAIN_SELECTOR_ALL
 
 
