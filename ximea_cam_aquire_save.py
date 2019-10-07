@@ -10,6 +10,8 @@ import mmap
 import copy
 import sys
 import gc
+import signal
+import gc
 
 import ctypes
 
@@ -151,7 +153,13 @@ def apply_cam_settings(cam, config_file):
             print(f"Camera doesn't have a set_{prop}")
                 
 def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
+                           
+    keyboard_interrupt = False
+    def _internal_callback(signum, frame):
+        keyboard_interrupt = True
     #setup folder structure and file
+    signal.signal(signal.SIGINT, _internal_callback)
+
     if not os.path.exists(os.path.join(save_folder, cam_name)):
         os.makedirs(os.path.join(save_folder, cam_name))
     ts_file_name = os.path.join(save_folder, f"timestamps_{cam_name}.tsv")
@@ -162,9 +170,9 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
     ts_file = open(ts_file_name, 'a+')
     #ts_file = os.open(ts_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_APPEND | os.O_SYNC | os.O_DIRECT)      
     i = 0
-    grbgim = save_queue_out.get()
+#     grbgim = save_queue_out.get()
     #grbgim = save_pipe_out.recv()
-    grbgim = grbgim.raw_data
+#     grbgim = grbgim.raw_data
     #imstr_array = bytearray(ims_per_file * grbgim) #empty byte string the size of image batches
     try:
         if(ims_per_file == 1):
@@ -183,12 +191,17 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
                 f = os.open(bin_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_TRUNC | os.O_SYNC | os.O_DIRECT)
                 for j in range(ims_per_file):
                     #image = save_pipe_out.recv()
-                    image = save_queue_out.get()
+                    images = save_queue_out.get()
                     os.write(f, image.raw_data)
                     ts_file.write( f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
                     #save_queue_out.task_done()
+                os.close(f)
+                print(save_queue_out.qsize())
                 i+=1
-    except:
+                if keyboard_interrupt:
+                    print("SAW AN INTERRUPT WOOO")
+    except Exception as e:
+        print(e)
         print('Exiting Save Thread')
 
 ##TODO: Safely handle a keyboard interrupt by continuing to save data until the pipes are empty
@@ -245,13 +258,14 @@ def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collectio
         camera.start_acquisition()
         image = xiapi.Image()
         
+        
         for i in range(max_frames):
             camera.get_image(image)
             data = image.get_image_data_raw()
-            d = frame_data(data,image.nframe,
-                                image.tsSec,
-                               image.tsUSec)
-            save_queue_in.put(d)
+            save_queue_in.put(frame_data(data,
+                               image.nframe,
+                               image.tsSec,
+                               image.tsUSec))
             
         print(f'{component_name} Reached {max_frames} frames collected')
         sync_str = get_sync_string(cam_name + "_post", camera)
@@ -274,7 +288,8 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     # 3 x save_queues
     # 3 x sync_queues
     
-    cameras = {'od': "XECAS1922000"}
+    cameras = {'od': "XECAS1922000",
+                'cy': "XECAS1930001"}
                #'os': "XECAS1922001"}
                #'cy': "XECAS1930001"}
             
@@ -297,7 +312,7 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
                                              save_queues[i],
                                              save_folders[i],
                                              ims_per_file))
-        proc.daemon = True
+        proc.daemon = False
         proc.start()
         save_threads.append(proc)
     
@@ -321,9 +336,9 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
 
     print(f"{component_name} Aquiring Until Finished...")
     #every 10 seconds, garbage collect (for queue)
-    gc_delay = 2
-    for i in range(int(max_collection_mins*60//gc_delay)):
-        time.sleep(gc_delay*2)
+#     gc_delay = 2
+#     for i in range(int(max_collection_mins*60//gc_delay)):
+#         time.sleep(gc_delay*2)
         #q_size = [q.qsize() for q in save_queues]
         #print(f'Queue size is {q_size}')
         
