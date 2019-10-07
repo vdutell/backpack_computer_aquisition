@@ -1,5 +1,7 @@
 import copy
-import multiprocessing as mp
+#import multiprocessing as mp
+import threading
+import queue as queue
 import time
 import os as os
 import numpy as np
@@ -153,11 +155,11 @@ def apply_cam_settings(cam, config_file):
             print(f"Camera doesn't have a set_{prop}")
                 
 def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
-    keyboard_interrupt = False
-    def _internal_callback(signum, frame):
-        keyboard_interrupt = True
-    #setup folder structure and file
-    signal.signal(signal.SIGINT, _internal_callback)
+#     keyboard_interrupt = False
+#     def _internal_callback(signum, frame):
+#         keyboard_interrupt = True
+#     #setup folder structure and file
+#     signal.signal(signal.SIGINT, _internal_callback)
 
     if not os.path.exists(os.path.join(save_folder, cam_name)):
         os.makedirs(os.path.join(save_folder, cam_name))
@@ -198,15 +200,15 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
                     os.write(f, image.raw_data)
                     ts_file.write( f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
                  
-                print(save_queue_out.qsize())
+                #print(save_queue_out.qsize())
                 #os.write(f, image_data)
                 #ts_file.write(ts_data)
                 #   #save_queue_out.task_done()
                 #os.close(f)
                 #print(save_queue_out.qsize())
                 i+=1
-                if keyboard_interrupt:
-                    print("SAW AN INTERRUPT")
+                #if keyboard_interrupt:
+                #    print("SAW AN INTERRUPT")
                                      
     except Exception as e:
         print(e)
@@ -304,8 +306,8 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
                     save_folders_list[1]
                    ]
     
-    save_queues = [mp.Queue() for _ in cameras]
-    sync_queues = [mp.Queue() for _ in cameras]
+    save_queues = [queue.Queue() for _ in cameras]
+    sync_queues = [queue.Queue() for _ in cameras]
     
     for save_folder in save_folders_list: 
         if not os.path.exists(save_folder):
@@ -314,7 +316,7 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     #start save threads
     save_threads = []
     for i, cam in enumerate(cameras):
-        proc = mp.Process(target=save_queue_worker, args=(cam,
+        proc = threading.Thread(target=save_queue_worker, args=(cam,
                                              save_queues[i],
                                              save_folders[i],
                                              ims_per_file))
@@ -325,7 +327,7 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     #start aquisition threads
     acquisition_threads = []
     for i, (cam_name, cam_sn) in enumerate(cameras.items()):
-        proc = mp.Process(target=acquire_camera,
+        proc = threading.Thread(target=acquire_camera,
                           args=(cam_sn,
                                 cam_name,
                                 sync_queues[i],
