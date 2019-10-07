@@ -153,7 +153,6 @@ def apply_cam_settings(cam, config_file):
             print(f"Camera doesn't have a set_{prop}")
                 
 def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
-                           
     keyboard_interrupt = False
     def _internal_callback(signum, frame):
         keyboard_interrupt = True
@@ -188,18 +187,27 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
             while True:
                 fstart=i*ims_per_file
                 bin_file_name = os.path.join(save_folder, cam_name, f'frames_{fstart}_{fstart+ims_per_file-1}.bin')
+                #image_data = b''
+                #ts_data = ''
                 f = os.open(bin_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_TRUNC | os.O_SYNC | os.O_DIRECT)
                 for j in range(ims_per_file):
                     #image = save_pipe_out.recv()
-                    images = save_queue_out.get()
+                    image = save_queue_out.get()
+                    #image_data+=image.raw_data
+                    #ts_data+=f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n"
                     os.write(f, image.raw_data)
                     ts_file.write( f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
-                    #save_queue_out.task_done()
-                os.close(f)
+                 
                 print(save_queue_out.qsize())
+                #os.write(f, image_data)
+                #ts_file.write(ts_data)
+                #   #save_queue_out.task_done()
+                #os.close(f)
+                #print(save_queue_out.qsize())
                 i+=1
                 if keyboard_interrupt:
-                    print("SAW AN INTERRUPT WOOO")
+                    print("SAW AN INTERRUPT")
+                                     
     except Exception as e:
         print(e)
         print('Exiting Save Thread')
@@ -213,7 +221,6 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
 #     finally:
 #         os.close(f)
 #         os.close(ts_file)
-
 
 def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collection_seconds,
                    component_name='SCENE_CAM'):
@@ -257,7 +264,6 @@ def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collectio
 
         camera.start_acquisition()
         image = xiapi.Image()
-        
         
         for i in range(max_frames):
             camera.get_image(image)
@@ -328,7 +334,6 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
                                      
         proc.daemon = True
         acquisition_threads.append(proc)
-
         
     print(f"{component_name} Starting acquisition threads...")
     for proc in acquisition_threads:
@@ -342,9 +347,9 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
         #q_size = [q.qsize() for q in save_queues]
         #print(f'Queue size is {q_size}')
         
-    print(f"{component_name} Finished Aquiring...")
     for proc in acquisition_threads:
         proc.join()
+    print(f"{component_name} Finished Aquiring...")
     
     
     print(f"{component_name} Saving Timestamp Sync Information...")
