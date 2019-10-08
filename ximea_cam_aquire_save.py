@@ -204,13 +204,14 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
                 #os.write(f, image_data)
                 #ts_file.write(ts_data)
                 #   #save_queue_out.task_done()
-                #os.close(f)
+                os.close(f)
                 #print(save_queue_out.qsize())
                 i+=1
                 #if keyboard_interrupt:
                 #    print("SAW AN INTERRUPT")
                                      
     except Exception as e:
+        
         print(e)
         print('Exiting Save Thread')
 
@@ -224,7 +225,7 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
 #         os.close(f)
 #         os.close(ts_file)
 
-def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collection_seconds,
+def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collection_seconds, stop_collecting,
                    component_name='SCENE_CAM'):
     
     """
@@ -236,6 +237,7 @@ def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collectio
         sync_queue (Multithreading.Queue): A queue which accepts the sync strings
         save_queue (Mutlithreading.Queue): A queue which accepts xiapi.Images
         max_collection_seconds (int): the maximum number of seconds to run
+        stop_collecting (threading.Event): keep collecting until this is set
         
         Any keywords which are present in default_settings may also be passed as 
         keyword arguments to this function as well.
@@ -249,9 +251,9 @@ def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collectio
                            framerate=None, ...)
    
     """  
-    
-    try:
-        
+    keep_collecting=True
+                                     
+    try: 
         print(f'{component_name} Opening Camera {cam_name}')
         camera = xiapi.Camera()
         camera.open_device_by_SN(cam_id)
@@ -266,14 +268,16 @@ def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collectio
 
         camera.start_acquisition()
         image = xiapi.Image()
-        
+                                     
+        print(f'{component_name} Begin Recording...')
         for i in range(max_frames):
-            camera.get_image(image)
-            data = image.get_image_data_raw()
-            save_queue_in.put(frame_data(data,
-                               image.nframe,
-                               image.tsSec,
-                               image.tsUSec))
+            while not stop_collecting.is_set():
+                camera.get_image(image)
+                data = image.get_image_data_raw()
+                save_queue_in.put(frame_data(data,
+                                   image.nframe,
+                                   image.tsSec,
+                                   image.tsUSec))
             
         print(f'{component_name} Reached {max_frames} frames collected')
         sync_str = get_sync_string(cam_name + "_post", camera)
@@ -312,61 +316,59 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     for save_folder in save_folders_list: 
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
-    
-    #start save threads
-    save_threads = []
-    for i, cam in enumerate(cameras):
-        proc = threading.Thread(target=save_queue_worker, args=(cam,
-                                             save_queues[i],
-                                             save_folders[i],
-                                             ims_per_file))
-        proc.daemon = False
-        proc.start()
-        save_threads.append(proc)
-    
-    #start aquisition threads
-    acquisition_threads = []
-    for i, (cam_name, cam_sn) in enumerate(cameras.items()):
-        proc = threading.Thread(target=acquire_camera,
-                          args=(cam_sn,
-                                cam_name,
-                                sync_queues[i],
-                                save_queues[i],
-                                max_collection_mins*60))
                                      
-        proc.daemon = True
-        acquisition_threads.append(proc)
-        
-    print(f"{component_name} Starting acquisition threads...")
-    for proc in acquisition_threads:
-        proc.start()
+    stop_collecting = threading.Event()
+    
+    try:
+        #start save threads
+        save_threads = []
+        for i, cam in enumerate(cameras):
+            proc = threading.Thread(target=save_queue_worker, args=(cam,
+                                                 save_queues[i],
+                                                 save_folders[i],
+                                                 ims_per_file))
+            proc.daemon = True
+            proc.start()
+            save_threads.append(proc)
 
-    print(f"{component_name} Aquiring Until Finished...")
-    #every 10 seconds, garbage collect (for queue)
-#     gc_delay = 2
-#     for i in range(int(max_collection_mins*60//gc_delay)):
-#         time.sleep(gc_delay*2)
-        #q_size = [q.qsize() for q in save_queues]
-        #print(f'Queue size is {q_size}')
-        
-    for proc in acquisition_threads:
-        proc.join()
-    print(f"{component_name} Finished Aquiring...")
-    
-    
-    print(f"{component_name} Saving Timestamp Sync Information...")
-    for i, (cam_name, cam_sn) in enumerate(cameras.items()):
-        write_sync_queue(sync_queues[i], cam_name, save_folders[i])
-    
-    print(f"{component_name} Waiting for Save Queues to Empty...")
-    for q in save_queues:
-        while not q.empty():
-            time.sleep(1)
-            #q_size = [q.qsize() for q in save_queues]
-            #print(f'Queue size is {q_size}')
+        #start aquisition threads
+        acquisition_threads = []
+        for i, (cam_name, cam_sn) in enumerate(cameras.items()):
+            proc = threading.Thread(target=acquire_camera,
+                              args=(cam_sn,
+                                    cam_name,
+                                    sync_queues[i],
+                                    save_queues[i],
+                                    max_collection_mins*60,
+                                    stop_collecting))
+            proc.daemon = False
+            acquisition_threads.append(proc)
+
+        print(f"{component_name} Starting Acquisition threads...")
+        for proc in acquisition_threads:
+            proc.start()
+
+        for proc in acquisition_threads:
+            proc.join()
+        print(f"{component_name} Finished Aquiring...")
+
+        print(f"{component_name} Saving Timestamp Sync Information...")
+        for i, (cam_name, cam_sn) in enumerate(cameras.items()):
+            write_sync_queue(sync_queues[i], cam_name, save_folders[i])
+
+        print(f"{component_name} Waiting for Save Queues to Empty...")
+        for q in save_queues:
+            while not q.empty():
+                time.sleep(1)
+                #q_size = [q.qsize() for q in save_queues]
+                #print(f'Queue size is {q_size}')
+
+        print(f"{component_name} Pipes are Empty. Camera Collection Finished without Interrupt")
                                      
-    print(f"{component_name} Pipes are Empty.")
-    
-        
+    except KeyboardInterrupt:
+        print(f'{component_name} Detected Keyboard Interrupt (main thread). Stopping Camera Acquisition')
+        stop_collecting.set()
                                      
-    print(f"{component_name} All Finished - Ending Process Now.")
+    finally:
+        print(f"{component_name} All Finished - Ending Ximea Camera Now.")
+                  
