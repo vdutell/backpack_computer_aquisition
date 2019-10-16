@@ -10,7 +10,6 @@ https://github.com/mtaung/eye_socket
 
 '''
 
-
 import zmq
 import msgpack as serializer
 
@@ -18,7 +17,7 @@ class ZMQsocket:
 
     # the ip address of the eyetracker is always 127.0.0.1.
 
-    def __init__(self, ip='127.0.0.1', port='50020'):
+    def __init__(self, ip='127.0.0.1', port='50020', component_name='PUPIL_CAM'):
         """
         Setup zmq socket, context, and remote helper.
 
@@ -29,21 +28,22 @@ class ZMQsocket:
         self.port = port
         self.ctx = zmq.Context()
         self.socket = zmq.Socket(self.ctx, zmq.REQ) # this is pub socket
-
+        self.socket.RCVTIMEO = 1000 #wait no longer than 1 second to recieve
+        self.component_name = component_name
+        
     def connect(self):
         """
         Connects to defined zmq socket.
         """
-        print(f'Connecting to socket at {self.ip}:{self.port} ...')
+        print(f'{self.component_name} Connecting to socket at {self.ip}:{self.port} ...')
         try:
             self.socket.connect(f'tcp://{self.ip}:{self.port}')
             self.socket.send_string('PUB_PORT')
             self.pub_port = self.socket.recv_string()
             self.pub_socket = zmq.Socket(self.ctx, zmq.PUB)
             self.pub_socket.connect(f"tcp://{self.ip}:{self.pub_port}")
-            print(f'Connected!')
         except:
-            print(f'Problem Connecting!')
+            print(f'{self.component_name} Problem Connecting on IP {self.ip}, port {self.port} ')
 
     def start_calibration(self):
         """
@@ -128,5 +128,3 @@ class ZMQsocket:
         """
         self.send_trigger(self.new_trigger('annotation', label, duration))
 
-
-    print('Done!')
