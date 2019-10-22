@@ -64,7 +64,9 @@ class T265CameraSource:
     def get_xyz(self) -> (float, float, float):
         data = self.get()
         return data.translation.x, data.translation.y, data.translation.z,
-
+     
+    def do_hardware_reset(self):
+        rs.device(self.__serial_number).hardware_reset()
 
 if __name__ == "__main__":
     number_of_experiments = 2

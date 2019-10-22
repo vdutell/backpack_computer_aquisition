@@ -21,6 +21,7 @@ def run_realsense_aquisition(save_folder, collection_mins, component_name='IMU')
     except:
         print(f'{component_name} ERROR: Two Realsense Trackers Not Found!')
         print(f'{component_name} Not recording IMU Data.')
+    
         return()
     
     ##File Structure
@@ -45,3 +46,9 @@ def run_realsense_aquisition(save_folder, collection_mins, component_name='IMU')
             i+=1
     
     print(f'{component_name} Finished Realsense Aquisition.')
+
+    #hardware resets not working at this time
+    #t1.do_hardware_reset()
+    #t2.do_hardware_reset()
+    #print(f'{component_name} Camearas Reset.')
+    

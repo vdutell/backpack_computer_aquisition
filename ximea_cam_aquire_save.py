@@ -269,15 +269,16 @@ def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collectio
         camera.start_acquisition()
         image = xiapi.Image()
                                      
-        print(f'{component_name} Begin Recording...')
+        print(f'{component_name} Begin Recording for up to {max_frames} frames...')
         for i in range(max_frames):
-            while not stop_collecting.is_set():
-                camera.get_image(image)
-                data = image.get_image_data_raw()
-                save_queue_in.put(frame_data(data,
+            camera.get_image(image)
+            data = image.get_image_data_raw()
+            save_queue_in.put(frame_data(data,
                                    image.nframe,
                                    image.tsSec,
                                    image.tsUSec))
+            if(stop_collecting.is_set()):
+                break
             
         print(f'{component_name} Reached {max_frames} frames collected')
         sync_str = get_sync_string(cam_name + "_post", camera)
@@ -300,8 +301,8 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     # 3 x save_queues
     # 3 x sync_queues
     
-    cameras = {'od': "XECAS1922000",
-                'cy': "XECAS1930001"}
+    cameras = {'od': "XECAS1922000"}
+               # 'cy': "XECAS1930001"}
                #'os': "XECAS1922001"}
                #'cy': "XECAS1930001"}
             
