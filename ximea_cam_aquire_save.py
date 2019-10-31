@@ -28,10 +28,10 @@ def get_sync_string(cam_name, cam_handle):
     Returns:
         sync_string (str): string to write to file with cam name, time, and wall time
     '''
-    t_wall_1 = time.monotonic()
+    t_wall_1 = time.time()
     t_cam = cam_handle.get_param('timestamp')
     t_cam = t_cam/(1e9) #this is returned in nanoseconds, change to seconds
-    t_wall_2 = time.monotonic()
+    t_wall_2 = time.time()
     t_wall = np.mean((t_wall_1, t_wall_2)) #take middle of two wall times
     dt = t_cam - t_wall
     sync_string = f'{cam_name}\t{t_wall}\t{t_cam}\t{dt}\n'
@@ -49,7 +49,7 @@ def write_sync_queue(sync_queue, cam_name, save_folder):
     '''
     sync_file_name = os.path.join(save_folder, f"timestamp_camsync_{cam_name}.tsv")
     with open(sync_file_name, 'w') as sync_file:
-        sync_file.write(f"i\tcam_name\t_wall\tt_cam\tdt\n")
+        sync_file.write(f"tcam_name\t_wall\tt_cam\tdt\n")
     #open it for appending
     sync_file = open(sync_file_name, 'a+')
     while not sync_queue.empty():
