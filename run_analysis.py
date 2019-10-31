@@ -389,3 +389,32 @@ def ximea_get_frame(frame_number, save_batchsize, cam_name, cam_save_folder, img
         frame[frame > 1] = 1
         
     return(frame)
+
+def pupil_framenum_to_timestamp(timestamp_file, framenum):
+    '''
+    Given a unix timestamp, what is the closest frame from a pupil camera recording?
+    Params:
+        timestamp_file (str): path to a timestamp file for this camera
+        framenum (int): framenum desired
+    Returns:
+        ts (float): timestamp of framenum frame
+    '''
+    timestamp_list = np.load(timestamp_file)
+    ts = timestamp_list[framenum]
+    return(ts)
+
+def pupil_timestamp_to_framenum(timestamp_file, timestamp):
+    '''
+    Given a unix timestamp, what is the closest frame from a pupil camera recording?
+    Params:
+        timestamp_file (str): path to a timestamp file for this camera
+        timestamp (float): timestamp desired.
+    Returns:
+        i (int): frame number of collection *NOT NFRAME CAMERA COUNTER*) closest to timestamp
+        true_timestamp (float): What is the real timestamp of this frame?
+    '''
+    timestamp_list = np.load(timestamp_file)
+    i = np.argmin(np.abs(timestamp_list-timestamp))
+    true_timestamp = timestamp_list[i]
+
+    return(i, true_timestamp)
