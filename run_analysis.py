@@ -326,3 +326,66 @@ def plot_camera_dframe(timestamp_file, figwrite_file, cam_name):
     plt.title(f'{cam_name} Camera Dframes')
     plt.savefig(figwrite_file)
     plt.show()
+    
+def ximea_timestamp_to_framenum(timestamp_file, timestamp):
+    '''
+    Given a unix timestamp, what is the closest frame from a ximea camera recording?
+    Params:
+        timestamp_file (str): path to a timestamp file for this camera
+        timestamp (float): timestamp desired.
+    Returns:
+        i (int): frame number of collection *NOT NFRAME CAMERA COUNTER*) closest to timestamp
+        true_timestamp (float): What is the real timestamp of this frame?
+    '''
+    with open(timestamp_file, 'r') as f:
+        ts_table=list(zip(line.strip().split('\t') for line in f))
+    
+    ts_table = np.squeeze(np.array(ts_table[1:]).astype('float'))
+    closest_idx = np.argmin(np.abs(ts_table[:,2]-timestamp))
+    i = int(ts_table[closest_idx,0])
+    true_timestamp = ts_table[closest_idx,2]
+    return(i, true_timestamp)
+    
+def ximea_framenum_to_timestamp(timestamp_file, framenum):
+    '''
+    Given a unix timestamp, what is the closest frame from a ximea camera recording?
+    Params:
+        timestamp_file (str): path to a timestamp file for this camera
+        framenum (int): framenum desired ***THIS IS NOT NFRAME CAMERA COUNTER but counter with respect to collection******.
+    Returns:
+        ts (float): timestamp of framenum frame
+    '''
+    
+    with open(timestamp_file, 'r') as f:
+        ts_table=list(zip(line.strip().split('\t') for line in f))
+    
+    ts_table = np.squeeze(np.array(ts_table[1:]).astype('float'))
+    ts = np.float(ts_table[np.where(ts_table[:,0]==framenum),2])
+    return(ts)
+
+def ximea_get_frame(frame_number, save_batchsize, cam_name, cam_save_folder, img_dims=(1544,2064), normalize=True):
+    '''
+    Get the filename and offset of a given frame number from the camera.
+    Params:
+        frame_number (int): number of frame desired
+        save_bathsize (int): what was the batchsize during collection?
+        cam_name (str): what is the name of the caera? OD/OS/CY
+        cam_save_folder (str): what is the name of the folder?
+        img_dims (int, int): dimensions of frame reading in.
+    Returns:
+        frame (2d numpy array): 2d array of frame from saved file
+    '''
+    
+    file_start = int(np.floor(frame_number/save_batchsize)*save_batchsize)
+    file_end = file_start + save_batchsize - 1
+    frame_offset = frame_number%file_start
+    file_name = f'frames_{file_start}_{file_end}.bin'
+    file_path = os.path.join(cam_save_folder, cam_name, file_name)
+    
+    frame = bin_to_im(file_path, frame_offset, img_dims)
+    
+    if normalize:
+        frame = frame/75
+        frame[frame > 1] = 1
+        
+    return(frame)
