@@ -166,7 +166,7 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
     ts_file_name = os.path.join(save_folder, f"timestamps_{cam_name}.tsv")
     #make a newtimestamp file
     with open(ts_file_name, 'w') as ts_file:
-        ts_file.write(f"i\tnframe\ttime\n")
+        ts_file.write(f"nframe\ttime\n")
     #open it for appending
     ts_file = open(ts_file_name, 'a+')
     #ts_file = os.open(ts_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_APPEND | os.O_SYNC | os.O_DIRECT)      
@@ -301,8 +301,8 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     # 3 x save_queues
     # 3 x sync_queues
     
-    cameras = {'od': "XECAS1922000"}
-               # 'cy': "XECAS1930001"}
+    cameras = {'od': "XECAS1922000",
+               'cy': "XECAS1930001"}
                #'os': "XECAS1922001"}
                #'cy': "XECAS1930001"}
             
