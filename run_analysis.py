@@ -418,3 +418,39 @@ def pupil_timestamp_to_framenum(timestamp_file, timestamp):
     true_timestamp = timestamp_list[i]
 
     return(i, true_timestamp)
+
+def convert_ximea_time_to_unix_time(timestamp_file, sync_file):
+    '''
+    Convert the ximea camera times to unix timestamps
+    Params:
+        timestamp_file (str): path to .csv file with ximea timesstamps
+        sync_file (str): path to .csv file with sync information
+    Returns:
+        unix_timestamp_array (2d np array): Unix Timestamps Inferred
+    '''
+    with open(timestamp_file, 'r') as f:
+        ts_table=list(zip(line.strip().split('\t') for line in f))
+    ts_table = np.squeeze(np.array(ts_table[1:]).astype(np.double))
+
+    with open(sync_file, 'r') as f:
+        sync_table=list(zip(line.strip().split('\t') for line in f))
+        
+    (unix_pre, cam_pre) = np.array(sync_table[1][0][1:]).astype(np.double)
+    (unix_post, cam_post) = np.array(sync_table[2][0][1:]).astype(np.double)
+
+    #how far off have the computer and camera timestamps drifted?
+    t_elapsed_unix = np.double(unix_post) - np.double(unix_pre)
+    t_elapsed_cam = np.double(cam_post) - np.double(cam_pre)
+    drift = np.abs(t_elapsed_unix - t_elapsed_cam)
+    print(f'Time Elapsed: {t_elapsed_unix} seconds')
+    print(f'Time Drift pre to post: {drift} seconds')
+    
+    # We assume here that time.time() in Linux's 0.001s precision is better than camera's.
+    # Convert Camera timestamps to Unix timestamps.
+    #first convert to [0,1]
+    t_cam_converted = (ts_table[:,2] - cam_pre) / (cam_post - cam_pre)
+    #then convert to wall time
+    t_cam_converted = (t_cam_converted * (unix_post - unix_pre)) + unix_pre
+    
+    t_cam_converted = np.append((ts_table, t_cam_converted),1)
+    return(t_cam_converted)
