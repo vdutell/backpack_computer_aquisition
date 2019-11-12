@@ -33,8 +33,7 @@ def get_sync_string(cam_name, cam_handle):
     t_cam = t_cam/(1e9) #this is returned in nanoseconds, change to seconds
     t_wall_2 = time.time()
     t_wall = np.mean((t_wall_1, t_wall_2)) #take middle of two wall times
-    dt = t_cam - t_wall
-    sync_string = f'{cam_name}\t{t_wall}\t{t_cam}\t{dt}\n'
+    sync_string = f'{cam_name}\t{t_wall}\t{t_cam}\n'
     return(sync_string)
 
 def write_sync_queue(sync_queue, cam_name, save_folder):
@@ -49,7 +48,7 @@ def write_sync_queue(sync_queue, cam_name, save_folder):
     '''
     sync_file_name = os.path.join(save_folder, f"timestamp_camsync_{cam_name}.tsv")
     with open(sync_file_name, 'w') as sync_file:
-        sync_file.write(f"tcam_name\t_wall\tt_cam\tdt\n")
+        sync_file.write(f"tcam_name\t_wall\t_cam\n")
     #open it for appending
     sync_file = open(sync_file_name, 'a+')
     while not sync_queue.empty():
@@ -139,6 +138,7 @@ def apply_cam_settings(cam, config_file):
         cam_props = yaml.load(f, Loader=yaml.UnsafeLoader)
         
     for prop, value in cam_props.items():
+        #print(prop, value)
         if f"set_{prop}" in dir(cam):
             try:
                 cam.__getattribute__(f"set_{prop}")(value)
@@ -154,7 +154,7 @@ def apply_cam_settings(cam, config_file):
         else:
             print(f"Camera doesn't have a set_{prop}")
                 
-def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
+def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file=100):
 #     keyboard_interrupt = False
 #     def _internal_callback(signum, frame):
 #         keyboard_interrupt = True
@@ -181,35 +181,22 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file):
                 bin_file_name = os.path.join(save_folder, cam_name, f'frame_{i}.bin')
                 f = os.open(bin_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_TRUNC | os.O_SYNC | os.O_DIRECT)
                 image = save_queue_out.get()
-                #image = save_pipe_out.recv()
                 os.write(f, image.raw_data)
-                ts_file.write( f"{i}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
+                ts_file.write(f"{i}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
                 i+=1
         else:
             while True:
                 fstart=i*ims_per_file
                 bin_file_name = os.path.join(save_folder, cam_name, f'frames_{fstart}_{fstart+ims_per_file-1}.bin')
-                #image_data = b''
-                #ts_data = ''
                 f = os.open(bin_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_TRUNC | os.O_SYNC | os.O_DIRECT)
                 for j in range(ims_per_file):
-                    #image = save_pipe_out.recv()
                     image = save_queue_out.get()
-                    #image_data+=image.raw_data
-                    #ts_data+=f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n"
                     os.write(f, image.raw_data)
-                    ts_file.write( f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
+                    ts_file.write(f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
                  
-                #print(save_queue_out.qsize())
-                #os.write(f, image_data)
-                #ts_file.write(ts_data)
-                #   #save_queue_out.task_done()
                 os.close(f)
-                #print(save_queue_out.qsize())
                 i+=1
-                #if keyboard_interrupt:
-                #    print("SAW AN INTERRUPT")
-                                     
+    
     except Exception as e:
         
         print(e)
@@ -296,16 +283,21 @@ def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collectio
         print(f"{component_name} Camera {cam_name} aquisition finished")
         
 
-def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, component_name='SCENE_CAM', memsize=10):
+def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, component_name='SCENE_CAM', memsize=10, num_cameras=3):
     
     # 3 x save_queues
     # 3 x sync_queues
-    
-    cameras = {'od': "XECAS1922000",
-               'cy': "XECAS1930001"}
-               #'os': "XECAS1922001"}
-               #'cy': "XECAS1930001"}
-            
+                                     
+    #use this syntax for variable number of cameras
+    camera_name_list = ['od', 'cy', 'os']
+    camera_sn_list = ["XECAS1922000", "XECAS1930001", "XECAS1922001"]                                
+    cameras = { camera_name_list[i] : camera_sn_list[i] for i in range(num_cameras) }
+                                     
+    #can use this syntax when we stabily  have all 3 cameras
+    #cameras = {'od': "XECAS1922000",
+    #           'cy': "XECAS1930001",
+    #           'os': "XECAS1922001"}
+               
     save_folders = [save_folders_list[0],
                     save_folders_list[1], # this line should be [0] when using 3 camears
                     save_folders_list[1]
