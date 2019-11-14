@@ -378,7 +378,7 @@ def ximea_get_frame(frame_number, save_batchsize, cam_name, cam_save_folder, img
     
     file_start = int(np.floor(frame_number/save_batchsize)*save_batchsize)
     file_end = file_start + save_batchsize - 1
-    frame_offset = frame_number%file_start
+    frame_offset = frame_number%file_start if file_start>0 else 0
     file_name = f'frames_{file_start}_{file_end}.bin'
     file_path = os.path.join(cam_save_folder, cam_name, file_name)
     
