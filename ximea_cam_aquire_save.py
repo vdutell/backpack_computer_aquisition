@@ -72,7 +72,7 @@ def get_cam_settings(cam, config_file):
     # if the config file already exists, pull the property names from that file
     if os.path.exists(config_file):
         with open(config_file, 'r') as f:
-            settings = yaml.load(f, Loader=yaml.UnsafeLoader)
+            settings = yaml.load(f)
         prop_names = list(settings.keys())
     
     # otherwise we have to grab them manually from the camera
@@ -135,7 +135,7 @@ def apply_cam_settings(cam, config_file):
         config_file (str): string filename of the config file for the camera
     """
     with open(config_file, 'r') as f:
-        cam_props = yaml.load(f, Loader=yaml.UnsafeLoader)
+        cam_props = yaml.load(f)
         
     for prop, value in cam_props.items():
         #print(prop, value)

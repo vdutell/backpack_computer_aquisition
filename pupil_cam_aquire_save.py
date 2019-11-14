@@ -1,6 +1,5 @@
 from time import time as t_time
 from time import sleep
-import pupil.pupil_src as pup_start
 import zmq_socket as zmqs
 import keyboard
 
