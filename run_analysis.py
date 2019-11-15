@@ -341,9 +341,9 @@ def ximea_timestamp_to_framenum(timestamp_file, timestamp):
         ts_table=list(zip(line.strip().split('\t') for line in f))
     
     ts_table = np.squeeze(np.array(ts_table[1:]).astype('float'))
-    closest_idx = np.argmin(np.abs(ts_table[:,2]-timestamp))
+    closest_idx = np.argmin(np.abs(ts_table[:,3]-timestamp))
     i = int(ts_table[closest_idx,0])
-    true_timestamp = ts_table[closest_idx,2]
+    true_timestamp = ts_table[closest_idx,3]
     return(i, true_timestamp)
     
 def ximea_framenum_to_timestamp(timestamp_file, framenum):
@@ -360,7 +360,7 @@ def ximea_framenum_to_timestamp(timestamp_file, framenum):
         ts_table=list(zip(line.strip().split('\t') for line in f))
     
     ts_table = np.squeeze(np.array(ts_table[1:]).astype('float'))
-    ts = np.float(ts_table[np.where(ts_table[:,0]==framenum),2])
+    ts = np.float(ts_table[np.where(ts_table[:,0]==framenum),3])
     return(ts)
 
 def ximea_get_frame(frame_number, save_batchsize, cam_name, cam_save_folder, img_dims=(1544,2064), normalize=True):
@@ -378,7 +378,7 @@ def ximea_get_frame(frame_number, save_batchsize, cam_name, cam_save_folder, img
     
     file_start = int(np.floor(frame_number/save_batchsize)*save_batchsize)
     file_end = file_start + save_batchsize - 1
-    frame_offset = frame_number%file_start if file_start>0 else 0
+    frame_offset = frame_number%file_start if file_start>0 else frame_number
     file_name = f'frames_{file_start}_{file_end}.bin'
     file_path = os.path.join(cam_save_folder, cam_name, file_name)
     
@@ -451,6 +451,7 @@ def convert_ximea_time_to_unix_time(timestamp_file, sync_file):
     t_cam_converted = (ts_table[:,2] - cam_pre) / (cam_post - cam_pre)
     #then convert to wall time
     t_cam_converted = (t_cam_converted * (unix_post - unix_pre)) + unix_pre
+    #add wall time 
+    t_cam_converted = np.append(ts_table, np.expand_dims(t_cam_converted,1),axis=1)
     
-    t_cam_converted = np.append((ts_table, t_cam_converted),1)
     return(t_cam_converted)
