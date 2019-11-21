@@ -419,6 +419,23 @@ def pupil_timestamp_to_framenum(timestamp_file, timestamp):
 
     return(i, true_timestamp)
 
+def pupil_get_frame(video_file, framenum, normalize=False):
+    '''
+    Grab the Pupil Cam Frame at a given framenum
+    Params:
+        video_file (str): path to a video file for this camera
+        framenum (int): framenumber desired.
+        normalize (bool): normalize the frame?
+    Returns:
+        frame (2d array): image from pupil camera
+    '''
+    vidcap = cv2.VideoCapture(video_file)
+    for i in range(framenum):
+        success, frame = vidcap.read()
+    if(normalize):
+        frame = 255*(frame/np.max(image))
+    return(frame)
+
 def convert_ximea_time_to_unix_time(timestamp_file, sync_file):
     '''
     Convert the ximea camera times to unix timestamps
@@ -448,10 +465,16 @@ def convert_ximea_time_to_unix_time(timestamp_file, sync_file):
     # We assume here that time.time() in Linux's 0.001s precision is better than camera's.
     # Convert Camera timestamps to Unix timestamps.
     #first convert to [0,1]
-    t_cam_converted = (ts_table[:,2] - cam_pre) / (cam_post - cam_pre)
+    #t_cam_converted = (ts_table[:,2] - cam_pre) / (cam_post - cam_pre)
     #then convert to wall time
-    t_cam_converted = (t_cam_converted * (unix_post - unix_pre)) + unix_pre
-    #add wall time 
+    #t_cam_converted = (t_cam_converted * (unix_post - unix_pre)) + unix_pre
+    
+    #assume time in camera is linear, and just change offset at pre.
+    t_cam_converted = ts_table[:,2] - ts_table[0,2] + unix_pre
+    
+    print(t_cam_converted[0])
+    
+    #add unix time to data
     t_cam_converted = np.append(ts_table, np.expand_dims(t_cam_converted,1),axis=1)
     
     return(t_cam_converted)

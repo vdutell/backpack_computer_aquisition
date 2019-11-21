@@ -4,7 +4,7 @@ import run_analysis as ana
 
 import time
 
-collection_mins = 0.1
+collection_mins = 0.5
 save_batchsize = 200
 
 save_folder = '/tb_disk/test/testing_framedrops'
@@ -19,7 +19,7 @@ print('Done Recording. Counting Missed Frames...')
 
 percent_dropped_file = f'{save_folder}/aggregate_framedrop.tsv'
 
-cams = ['od','cy','os']
+cams = ['cy','os','od']
 for i in range(ncams):
 	with open(percent_dropped_file, 'a+') as f:
 		cam_name = cams[i]
