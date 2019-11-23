@@ -16,7 +16,7 @@ import signal
 import gc
 import ctypes
 
-import pupil.shared_modules.time_sync as pup_time
+#import pupil.pupil_src.shared_modules.time_sync as pup_time
 
 frame_data = namedtuple("frame_data", "raw_data nframe tsSec tsUSec")
 
@@ -291,7 +291,7 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
                                      
     #use this syntax for variable number of cameras
     camera_name_list = ['cy', 'os','od']
-    camera_sn_list = ["XECAS1930001", "XECAS1922001", "XECAS1922000"]                                
+    camera_sn_list = ["XECAS1930001", "XEMAS1836000", "XECAS1922000"]                                
     cameras = { camera_name_list[i] : camera_sn_list[i] for i in range(num_cameras) }
                                      
     #can use this syntax when we stabily  have all 3 cameras
@@ -300,8 +300,8 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     #           'os': "XECAS1922001"}
                
     save_folders = [save_folders_list[0],
-                    save_folders_list[1], # this line should be [0] when using 3 camears
-                    save_folders_list[1]
+                    save_folders_list[0], # this line should be [0] when using 3 camears
+                    save_folders_list[0]
                    ]
     
     save_queues = [queue.Queue() for _ in cameras]
