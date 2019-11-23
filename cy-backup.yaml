@@ -1,0 +1,106 @@
+output_bit_packing_type: XI_DATA_PACK_PFNC_LSB_PACKING
+binning_horizontal: 1
+binning_horizontal_mode: XI_BIN_MODE_SUM
+binning_horizontal_pattern: XI_BIN_BAYER
+binning_selector: XI_BIN_SELECT_SENSOR
+binning_vertical: 1
+binning_vertical_mode: XI_BIN_MODE_SUM
+binning_vertical_pattern: XI_BIN_BAYER
+decimation_horizontal: 1
+decimation_horizontal_pattern: XI_DEC_BAYER
+decimation_selector: XI_DEC_SELECT_SENSOR
+decimation_vertical: 1
+decimation_vertical_pattern: XI_DEC_BAYER
+LUTIndex: 4095
+LUTValue: 4095
+wb_kb: 1.0
+wb_kg: 1.0
+wb_kr: 1.0
+wb_roi_height: 0
+wb_roi_offset_x: 0
+wb_roi_offset_y: 0
+wb_roi_width: 0
+trigger_delay: 0
+trigger_overlap: XI_TRG_OVERLAP_READ_OUT
+aeag_level: 50
+aeag_roi_height: 1544
+aeag_roi_offset_x: 0
+aeag_roi_offset_y: 0
+aeag_roi_width: 2064
+
+exposure_burst_count: 1
+trigger_selector: XI_TRG_SEL_FRAME_START
+trigger_source: XI_TRG_OFF
+
+shutter_type: XI_SHUTTER_GLOBAL
+temp_selector: XI_TEMP_SENSOR_BOARD
+test_pattern: XI_TESTPAT_OFF
+test_pattern_generator_selector: XI_TESTPAT_GEN_FPGA
+proc_num_threads: 8
+debug_level: XI_DL_WARNING
+downsampling_type: XI_SKIPPING
+downsampling: XI_DWN_1x1
+ae_max_limit: 200000
+ag_max_limit: 24.0
+gammaC: 0.800000011920929
+gammaY: 0.4699999988079071
+exp_priority: 1.0
+cam_simulators_count: 0
+cooling: XI_TEMP_CTRL_MODE_OFF
+cms_intent: XI_CMS_INTENT_PERCEPTUAL
+cms: XI_CMS_DIS
+image_black_level: 0
+imgdataformatrgb32alpha: 0
+offsetX: 0
+offsetY: 0
+ext_feature: 0
+ext_feature_selector: XI_EXT_FEATURE_SEL_DITHERING_HOST
+sensor_output_channel_count: XI_CHANN_CNT16
+sensor_taps: XI_TAP_CNT_1
+acq_frame_burst_count: 1
+transport_data_target: XI_TRANSPORT_DATA_TARGET_CPU_RAM
+
+ts_rst_mode: XI_TS_RST_ARM_ONCE
+ts_rst_source: XI_TS_RST_OFF
+
+width: 2064
+height: 1544
+
+is_output_bit_packing: false
+
+image_data_bit_depth: XI_BPP_8
+output_bit_depth: XI_BPP_8
+sensor_bit_depth: XI_BPP_8
+imgdataformat: XI_RAW8
+
+acq_buffer_size: 600000000
+acq_buffer_size_unit: 1
+buffers_queue_size: 165
+counter_selector: XI_CNT_SEL_TRANSPORT_SKIPPED_FRAMES
+sharpness: 0.0
+
+gain: 1
+gain_selector: XI_GAIN_SELECTOR_ALL
+
+
+is_LUTEnable: false
+is_aeag: false
+is_apply_cms: false
+is_auto_wb: false
+is_bpc: false
+is_cam_enum_golden_enabled: false
+is_cam_sensor_init_disabled: false
+is_ffc: false
+is_gentl_stream_en: false
+is_horizontal_flip: false
+is_vertical_flip: false
+is_new_process_chain_enable: true
+is_recent_frame: false
+
+is_auto_bandwidth_calculation: false
+limit_bandwidth: 10000
+limit_bandwidth_mode: XI_OFF
+buffer_policy: XI_BP_UNSAFE
+exposure: 4850
+acq_timing_mode: XI_ACQ_TIMING_MODE_FRAME_RATE_LIMIT
+framerate: 200.0
