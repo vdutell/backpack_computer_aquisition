@@ -17,7 +17,7 @@ imgdataformat: XI_RAW8
 
 acq_buffer_size: 100000000
 acq_buffer_size_unit: 1
-buffers_queue_size: 4
+buffers_queue_size: 2
 
 gain: 1
 gain_selector: XI_GAIN_SELECTOR_ALL
@@ -25,9 +25,9 @@ gain_selector: XI_GAIN_SELECTOR_ALL
 is_aeag: false
 
 is_auto_bandwidth_calculation: false
-limit_bandwidth: 6500
-limit_bandwidth_mode: XI_OFF
-buffer_policy: XI_BP_UNSAFE
+limit_bandwidth: 10000
+limit_bandwidth_mode: XI_ON
+buffer_policy: XI_BP_SAFE
 exposure: 4850
 acq_timing_mode: XI_ACQ_TIMING_MODE_FRAME_RATE_LIMIT
 framerate: 200.0
