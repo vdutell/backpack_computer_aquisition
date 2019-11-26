@@ -7,7 +7,7 @@ import time
 collection_mins = 0.5
 save_batchsize = 200
 
-save_folder = '/tb_disk/test/testing_framedrops'
+save_folder = './test/testing_framedrops'
 save_folder_list= [save_folder, save_folder]
 
 ncams = int(input("how many cameras?"))
