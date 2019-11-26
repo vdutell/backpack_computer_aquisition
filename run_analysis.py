@@ -419,6 +419,20 @@ def pupil_timestamp_to_framenum(timestamp_file, timestamp):
 
     return(i, true_timestamp)
 
+def pupl_get_framemeans(video_file, frame_start, nframes):
+    '''
+    Caclualte the framemeans for a set of frames in sucession
+    '''
+    vidcap = cv2.VideoCapture(video_file)
+    means = []
+    for i in range(frame_start):
+        success, frame = vidcap.read()
+    for i in range(frame_start, frame_start+nframes):
+        success, frame = vidcap.read()
+        means.append(np.mean(frame))
+    
+    return(means)
+
 def pupil_get_frame(video_file, framenum, normalize=False):
     '''
     Grab the Pupil Cam Frame at a given framenum
