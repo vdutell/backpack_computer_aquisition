@@ -15,6 +15,7 @@ import gc
 import signal
 import gc
 import ctypes
+import stat
 
 #import pupil.pupil_src.shared_modules.time_sync as pup_time
 
@@ -164,6 +165,7 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file=100):
 
     if not os.path.exists(os.path.join(save_folder, cam_name)):
         os.makedirs(os.path.join(save_folder, cam_name))
+        os.chmod(save_folder, stat.S_IRWXO)
     ts_file_name = os.path.join(save_folder, f"timestamps_{cam_name}.tsv")
     #make a newtimestamp file
     with open(ts_file_name, 'w') as ts_file:
@@ -310,7 +312,9 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
     for save_folder in save_folders_list: 
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
-                                     
+            os.chmod(save_folder, stat.S_IRWXO)
+
+
     stop_collecting = threading.Event()
     
     try:
