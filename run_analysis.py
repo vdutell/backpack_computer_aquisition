@@ -56,7 +56,7 @@ def convert_bin_png(filename, save_folder_list, im_shape=(1544,2064), img_format
     return()
 
 
-def bin_to_im(binfile, nframe, dims=(1544,2064)):
+def bin_to_im(binfile, nframe, dims=(1544,2064),quickread=True):
     '''
     convert a single image from 8-bit raw bytes to png image.
     Input:
@@ -64,23 +64,27 @@ def bin_to_im(binfile, nframe, dims=(1544,2064)):
         dims (2ple int): What are the dimensions of the iamge?
         nframe (int): Which frame number do we want within image?
         '''
-    a = []
     # for uint8
     nbytes = np.prod(dims)
     startbyte = nframe*nbytes
-    with open(binfile, 'rb') as fn:
-        fn.seek(startbyte)
-        bs = fn.read(1)
-        for i in range(nbytes):
+    if(quickread):
+        with open(binfile, 'rb') as fn:
+            fn.seek(startbyte+1)
+            im = fn.read(nbytes)
+        im = np.frombuffer(im,dtype='uint8')
+    else:
+        im = []
+        with open(binfile, 'rb') as fn:
+            fn.seek(startbyte)
             bs = fn.read(1)
-            bs = int.from_bytes(bs,'big')
-            a.append(bs)
-            
-    a = np.array(a)
-    im = a.reshape(dims)
-    imc = cv2.cvtColor(np.uint8(im), cv2.COLOR_BayerGR2RGB)
-    
-    return(imc)
+            for i in range(nbytes):
+                bs = fn.read(1)
+                bs = int.from_bytes(bs,'big')
+                im.append(bs)
+            im = np.array(im)
+    im = im.reshape(dims)
+    im = cv2.cvtColor(np.uint8(im), cv2.COLOR_BayerGR2RGB)
+    return(im)
 
 def convert_folder(read_folder, write_folder):
     '''
