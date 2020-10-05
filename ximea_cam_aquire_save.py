@@ -62,26 +62,26 @@ def get_cam_settings(cam, config_file):
     """
     Get the current settings of this camera, settings will be saved in
     alphabetical order, and have to be ordered correctly.
-    
+
     If the config file already exists, ordering of keys remains the same
     and will only be updated.
-    
+
     Params:
         camera (XimeaCamera instance): camera handle
         config_file (str): string filename of the config file for the camera
     """
-    
+
     # if the config file already exists, pull the property names from that file
     if os.path.exists(config_file):
         with open(config_file, 'r') as f:
             settings = yaml.safe_load(f)
         prop_names = list(settings.keys())
-    
+
     # otherwise we have to grab them manually from the camera
     else:
         deny_list = ["api_progress_callback", "device_",
                     'list', 'ccMTX', '_file_name', "ffs_",
-                    '_revision', "_profile", "number_devices", 
+                    '_revision', "_profile", "number_devices",
                     "hdr_", "lens_focus_move", 'manual_wb', "trigger_software"]
         prop_names = []
         for prop in dir(cam):
@@ -95,19 +95,19 @@ def get_cam_settings(cam, config_file):
 
             if any([f in prop for f in deny_list]):
                 continue
-            
+
             prop_names.append(prop)
-        
+
         for prop in dir(cam):
             if "enable_" not in prop:
                 continue
             prop = prop.replace("enable_", '')
-            
+
             if f"disable_{prop}" not in dir(cam):
                 continue
-            
+
             prop_names.append("is_" + prop)
-    
+
     # go through the list of property names and attempt to get them
     # from the camera, if the camera gets grumpy, ignore it.
     cam_props = {}
@@ -126,19 +126,19 @@ def get_cam_settings(cam, config_file):
     # take our collected properties and stuff them back into the config
     with open(config_file, 'w') as f:
         yaml.dump(cam_props, f, default_flow_style = False)
-        
+
 
 def apply_cam_settings(cam, config_file):
     """
     Apply settings to the camera from a config file.
-    
+
     Params:
         camera (XimeaCamera instance): camera handle
         config_file (str): string filename of the config file for the camera
     """
     with open(config_file, 'r') as f:
         cam_props = yaml.safe_load(f)
-        
+
     for prop, value in cam_props.items():
         #print(prop, value)
         if f"set_{prop}" in dir(cam):
@@ -152,11 +152,11 @@ def apply_cam_settings(cam, config_file):
                 cam.__getattribute__(f"{en_dis}{prop.replace('is_', '')}")()
             except Exception as e:
                 print(e)
-                                         
+
         else:
             print(f"Camera doesn't have a set_{prop}")
-                
-def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file=100):
+
+def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file=200):
 #     keyboard_interrupt = False
 #     def _internal_callback(signum, frame):
 #         keyboard_interrupt = True
@@ -172,7 +172,7 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file=100):
         ts_file.write(f"nframe\ttime\n")
     #open it for appending
     ts_file = open(ts_file_name, 'a+')
-    #ts_file = os.open(ts_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_APPEND | os.O_SYNC | os.O_DIRECT)      
+    #ts_file = os.open(ts_file_name, os.O_WRONLY | os.O_CREAT , 0o777 | os.O_APPEND | os.O_SYNC | os.O_DIRECT)
     i = 0
 #     grbgim = save_queue_out.get()
     #grbgim = save_pipe_out.recv()
@@ -196,12 +196,12 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file=100):
                     image = save_queue_out.get()
                     os.write(f, image.raw_data)
                     ts_file.write(f"{fstart+j}\t{image.nframe}\t{image.tsSec}.{str(image.tsUSec).zfill(6)}\n")
-                 
+
                 os.close(f)
                 i+=1
-    
+
     except Exception as e:
-        
+
         print(e)
         print('Exiting Save Thread')
 
@@ -217,19 +217,19 @@ def save_queue_worker(cam_name, save_queue_out, save_folder, ims_per_file=100):
 
 def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collection_seconds, stop_collecting,
                    component_name='SCENE_CAM'):
-    
+
     """
     Acquire frames from a single camera.
-    
+
     Parameters:
         cam_id (str):  The serial number of the camera
         cam_name (str): A text name for the camera
-        sync_queue (Multithreading.Queue): A queue which accepts the sync strings
-        save_queue (Mutlithreading.Queue): A queue which accepts xiapi.Images
+        sync_queue (queue.Queue): A queue which accepts the sync strings
+        save_queue (queue.Queue): A queue which accepts xiapi.Images
         max_collection_seconds (int): the maximum number of seconds to run
         stop_collecting (threading.Event): keep collecting until this is set
-        
-        Any keywords which are present in default_settings may also be passed as 
+
+        Any keywords which are present in default_settings may also be passed as
         keyword arguments to this function as well.
         IE:
             acquire_camera("some_id",
@@ -239,26 +239,26 @@ def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collectio
                            10,
                            timing_mode=None,
                            framerate=None, ...)
-   
-    """  
+
+    """
     keep_collecting=True
-                                     
-    try: 
+
+    try:
         print(f'{component_name} Opening Camera {cam_name}')
         camera = xiapi.Camera()
         camera.open_device_by_SN(cam_id)
-        
+
         apply_cam_settings(camera, cam_name+".yaml")
         framerate = camera.__getattribute__(f"get_framerate")()
         max_frames = np.int(np.around(max_collection_seconds * framerate))
-        
+
         print(f'{component_name} Recording Timestamp Syncronization Pre...')
         sync_str = get_sync_string(cam_name + "_pre", camera)
         sync_queue_in.put(sync_str)
 
         camera.start_acquisition()
         image = xiapi.Image()
-                                     
+
         print(f'{component_name} Begin Recording for up to {max_frames} frames...')
         for i in range(max_frames):
             camera.get_image(image)
@@ -269,54 +269,54 @@ def acquire_camera(cam_id, cam_name, sync_queue_in, save_queue_in, max_collectio
                                    image.tsUSec))
             if(stop_collecting.is_set()):
                 break
-            
+
         print(f'{component_name} Reached {max_frames} frames collected')
         sync_str = get_sync_string(cam_name + "_post", camera)
         sync_queue_in.put(sync_str)
-        
+
     except KeyboardInterrupt:
         print(f'{component_name} Detected Keyboard Interrupt. Stopping Acquisition')
         sync_str = get_sync_string(cam_name + "_post", camera)
         sync_queue_in.put(sync_str)
-        
+
     finally:
         print(f"{component_name} Camera {cam_name} Cleanup...")
         camera.stop_acquisition()
         camera.close_device()
         print(f"{component_name} Camera {cam_name} aquisition finished")
-        
+
 
 def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, component_name='SCENE_CAM', memsize=10, num_cameras=3):
-    
+
     # 3 x save_queues
     # 3 x sync_queues
-                                     
+
     #use this syntax for variable number of cameras
     camera_name_list = ['cy', 'os','od']
-    camera_sn_list = ["XECAS1930001", "XEMAS1836000", "XECAS1922000"]                                
+    camera_sn_list = ["XECAS1930001", "XEMAS1836000", "XECAS1922000"]
     cameras = { camera_name_list[i] : camera_sn_list[i] for i in range(num_cameras) }
-                                     
+
     #can use this syntax when we stabily  have all 3 cameras
     #cameras = {'od': "XECAS1922000",
     #           'cy': "XECAS1930001",
     #           'os': "XECAS1922001"}
-               
+
     save_folders = [save_folders_list[0],
                     save_folders_list[0], # this line should be [0] when using 3 camears
                     save_folders_list[0]
                    ]
-    
+
     save_queues = [queue.Queue() for _ in cameras]
     sync_queues = [queue.Queue() for _ in cameras]
-    
-    for save_folder in save_folders_list: 
+
+    for save_folder in save_folders_list:
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
             os.chmod(save_folder, stat.S_IRWXO)
 
 
     stop_collecting = threading.Event()
-    
+
     try:
         #start save threads
         save_threads = []
@@ -362,11 +362,10 @@ def ximea_acquire(save_folders_list, max_collection_mins=1, ims_per_file=100, co
                 #print(f'Queue size is {q_size}')
 
         print(f"{component_name} Pipes are Empty. Camera Collection Finished without Interrupt")
-                                     
+
     except KeyboardInterrupt:
         print(f'{component_name} Detected Keyboard Interrupt (main thread). Stopping Camera Acquisition')
         stop_collecting.set()
-                                     
+
     finally:
         print(f"{component_name} All Finished - Ending Ximea Camera Now.")
-                  

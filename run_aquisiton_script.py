@@ -12,14 +12,14 @@ import schedule
 import time
 
 #settings
-subject = 'test_subject'
-task = 'test_task'
-exp = 'exp'
-capture_dir_list = ['./capture', '/tb_disk/capture']
+subject = 'buddy_stationary'
+task = 'chat_1'
+exp = 'pre'
+capture_dir_list = ['./capture]
 analysis_dir = './analysis'
 
-collection_minutes = 0.2
-save_batchsize = 100
+collection_minutes = 1
+save_batchsize = 200
 
 imp.reload(runexp)
 imp.reload(xim)

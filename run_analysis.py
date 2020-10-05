@@ -83,7 +83,7 @@ def bin_to_im(binfile, nframe, dims=(1544,2064),quickread=True):
                 im.append(bs)
             im = np.array(im)
     im = im.reshape(dims)
-    im = cv2.cvtColor(np.uint8(im), cv2.COLOR_BayerGR2RGB)
+    im = cv2.cvtColor(im, cv2.COLOR_BayerGR2RGB)
     return(im)
 
 def convert_folder(read_folder, write_folder):
@@ -448,20 +448,24 @@ def pupil_get_frame(video_file, framenum, normalize=False):
         frame (2d array): image from pupil camera
     '''
     vidcap = cv2.VideoCapture(video_file)
-    for i in range(framenum):
+    for i in range(framenum+1):
         success, frame = vidcap.read()
-    if(normalize):
-        frame = 255*(frame/np.max(image))
-    return(frame)
+    if(success):
+        if(normalize):
+            frame = 255*(frame/np.max(image))
+        return(frame)
+    else:
+        print(f'Failed to get frame number {framenum}')
+        return(0)
 
-def convert_ximea_time_to_unix_time(timestamp_file, sync_file):
+def convert_ximea_time_to_unix_and_pl_time(timestamp_file, sync_file):
     '''
-    Convert the ximea camera times to unix timestamps
+    Convert the ximea camera times to unix and pupil labs timestamps
     Params:
         timestamp_file (str): path to .csv file with ximea timesstamps
         sync_file (str): path to .csv file with sync information
     Returns:
-        unix_timestamp_array (2d np array): Unix Timestamps Inferred
+        unix_timestamp_array (2d np array): Unix Timestamps and pupil labs timestamps Inferred
     '''
     with open(timestamp_file, 'r') as f:
         ts_table=list(zip(line.strip().split('\t') for line in f))
@@ -469,30 +473,52 @@ def convert_ximea_time_to_unix_time(timestamp_file, sync_file):
 
     with open(sync_file, 'r') as f:
         sync_table=list(zip(line.strip().split('\t') for line in f))
-        
-    (unix_pre, cam_pre) = np.array(sync_table[1][0][1:]).astype(np.double)
-    (unix_post, cam_post) = np.array(sync_table[2][0][1:]).astype(np.double)
+            
+    (plsync_pre, cam_pre, unix_pre) = np.array(sync_table[1][0][1:]).astype(np.double)
+    (plsync_post, cam_post, unix_post) = np.array(sync_table[2][0][1:]).astype(np.double)
 
     #how far off have the computer and camera timestamps drifted?
+    t_elapsed_pl = np.double(plsync_post) - np.double(plsync_pre)
     t_elapsed_unix = np.double(unix_post) - np.double(unix_pre)
     t_elapsed_cam = np.double(cam_post) - np.double(cam_pre)
-    drift = np.abs(t_elapsed_unix - t_elapsed_cam)
-    print(f'Time Elapsed: {t_elapsed_unix} seconds')
-    print(f'Time Drift pre to post: {drift} seconds')
-    
+    drift_cm_pl = np.abs(t_elapsed_pl - t_elapsed_cam)
+    drift_cm_ux = np.abs(t_elapsed_unix - t_elapsed_cam)
+    drift_pl_ux = np.abs(t_elapsed_unix - t_elapsed_pl)
+    print(f'Time Elapsed Cam: {t_elapsed_cam} seconds')
+    print(f'Time Elapsed Pupil: {t_elapsed_pl} seconds')
+    print(f'Time Elapsed Unix: {t_elapsed_unix} seconds')
+    print(f'Time Drift cam vs pupil: {drift_cm_pl} seconds')
+    print(f'Time Drift cam vs unix: {drift_cm_ux} seconds')
+    print(f'Time Drift unix vs pupil: {drift_pl_ux} seconds')
+
     # We assume here that time.time() in Linux's 0.001s precision is better than camera's.
     # Convert Camera timestamps to Unix timestamps.
-    #first convert to [0,1]
-    #t_cam_converted = (ts_table[:,2] - cam_pre) / (cam_post - cam_pre)
-    #then convert to wall time
-    #t_cam_converted = (t_cam_converted * (unix_post - unix_pre)) + unix_pre
+#     #first convert to [0,1]
+    #timestamps_unix = (ts_table[:,1] - cam_pre) / (cam_post - cam_pre)
+    #timestamps_plsync = (ts_table[:,2] - cam_pre) / (cam_post - cam_pre)
+#     #then convert to wall time
+    #timestamps_unix = (timestamps_unix * (unix_post - unix_pre)) + unix_pre
+    #timestamps_plsync = (timestamps_plsync * (unix_post - unix_pre)) + plsync_pre
+
+    #calculate offset from camera and two timekeeping methods
+    d_xim_to_pup = plsync_pre - cam_pre
+    #d_xim_to_pup = np.mean((plsync_pre - cam_pre, plsync_post - cam_post))
+    timestamps_plsync = ts_table[:,2] + d_xim_to_pup
     
-    #assume time in camera is linear, and just change offset at pre.
-    t_cam_converted = ts_table[:,2] - ts_table[0,2] + unix_pre
+    d_xim_to_unix = unix_pre - cam_pre
+    #d_xim_to_unix = np.mean((unix_pre - cam_pre, unix_post - cam_post))
+    timestamps_unix = ts_table[:,2] + d_xim_to_unix
     
-    print(t_cam_converted[0])
     
-    #add unix time to data
-    t_cam_converted = np.append(ts_table, np.expand_dims(t_cam_converted,1),axis=1)
+    timestamps_unix_adjusted = timestamps_unix - (timestamps_unix[0]-timestamps_plsync[0])
+    #print(timestamps_unix[0], timestamps_plsync[0], timestamps_unix_adjusted[0])
     
-    return(t_cam_converted)
+    #add unix time to data table
+    t_cam_converted = np.append(ts_table, np.expand_dims(timestamps_unix,1),axis=1)
+    t_cam_converted = np.append(t_cam_converted, np.expand_dims(timestamps_plsync,1),axis=1)
+    t_cam_converted = np.append(t_cam_converted, np.expand_dims(timestamps_unix_adjusted,1),axis=1)
+
+    table_cols = ['frame_number', 'xim_count', 'timestamps_ximea','timestamps_convert_unix', 'timestamps_convert_plsync', 'timestamps_unix_adjusted']
+    
+    return(t_cam_converted, table_cols)
+

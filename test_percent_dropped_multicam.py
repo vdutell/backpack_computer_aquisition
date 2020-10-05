@@ -10,7 +10,7 @@ save_batchsize = 200
 save_folder = './test/testing_framedrops'
 save_folder_list= [save_folder, save_folder]
 
-ncams = 1
+ncams = int(input("how many cameras?"))
 
 print(f'Collecting for {collection_mins*60.} seconds...')
 xim.ximea_acquire(save_folder_list, max_collection_mins=collection_mins, ims_per_file=save_batchsize, num_cameras=ncams)
